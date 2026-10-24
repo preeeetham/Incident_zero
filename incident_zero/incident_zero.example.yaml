@@ -1,0 +1,25 @@
+# Copy to incident_zero.yaml (repository root or the directory you run from). Every key can also be set as an
+# environment variable: IZ_<KEY> (e.g. IZ_DEMO_DIR, IZ_PORT, IZ_DRY_RUN). The LLM and SMTP are configured in .env
+# (see .env.example: LLM_PROVIDER, LLM_MODEL, LLM_BASE_URL, LLM_API_KEY, SMTP_*).
+
+demo_dir: ~/Developer/opentelemetry-demo          # a checkout of open-telemetry/opentelemetry-demo
+compose_project: opentelemetry-demo
+compose_files: [compose.yaml, compose.full.yaml, compose.observability.yaml]   # every service incl. the Kafka group
+frontend_url: http://127.0.0.1:8080
+
+# Telemetry endpoints: leave empty to discover them from the running stack's published ports.
+prometheus_url: ""
+jaeger_url: ""
+opensearch_url: ""
+
+action_api_url: http://127.0.0.1:8701             # the mock (`incident_zero action-api`) or the jury's API
+port: 8700
+dry_run: true                                     # the starting mode; switch in the Control Room
+approval_timeout_s: 600
+notify_email: ""                                  # approval mail; SMTP_* in .env
+
+thresholds:
+  error_ratio: 0.05
+  latency_p95_floor_ms: 800
+  latency_factor: 3.0
+  traffic_factor: 3.0

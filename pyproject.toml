@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "incident_zero"
+version = "0.1.0"
+description = "Incident Zero: an AI on-call engineer for the OpenTelemetry Demo."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "docker>=7",
+    "requests>=2.31",
+    "pydantic>=2.6",
+    "pyyaml>=6",
+    "jsonschema>=4.20",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+# The Investigator's LLM tool loop. Without it every agent falls back to its deterministic path.
+# Install with: pip install -e '.[incident_zero]'
+incident_zero = [
+    "langgraph>=1.2,<2",
+    "langchain-core>=1.6,<2",
+    "langchain-openai>=1.7,<2",
+    "langchain-anthropic>=1.7,<2",
+    "langchain-ollama>=1.1,<2",
+]
+
+[project.scripts]
+incident_zero = "incident_zero.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["incident_zero*"]
+
+[tool.setuptools.package-data]
+"incident_zero" = ["ui/dist/*", "ui/dist/assets/*", "practice/*.yaml", "*.example.yaml", "runbook.yaml",
+                   "schema/*.json", "knowledge/runbooks/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["incident_zero/tests"]
+addopts = "-q"

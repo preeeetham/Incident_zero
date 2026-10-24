@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# Local configuration (secrets, API keys)
+.env
+
+# Incident Zero runtime state (incidents, events, evidence) and practice ground truth
+.incident_zero/
+.incident_zero_practice/
+/incident_zero.yaml
+
+# Logs
+*.log
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# UI dependencies
+node_modules/
