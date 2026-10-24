@@ -1,0 +1,7 @@
+# Limits for the Remediation Planner's rules. Which feature flags guard which code is no longer written here: the
+# Planner finds it in the demo's source code at run time (incident_zero/knowledge/code_index.py), and what fixes
+# which symptom lives in the runbooks (incident_zero/knowledge/runbooks/*.md).
+
+# Below these limits a container is starved by its configuration; no allowed action changes limits, so escalate.
+starved_cpu_limit: 0.25
+starved_memory_limit_mb: 64
