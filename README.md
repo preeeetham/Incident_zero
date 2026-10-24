@@ -1,110 +1,249 @@
-# Incident Zero — an AI on-call engineer
+<div align="center">
 
-Detects an incident in the OpenTelemetry Demo, investigates it with real telemetry, names the root cause with
-evidence that exists in the collected data, proposes a fix from the Action API's allowed actions, grounded in
-knowledge it retrieves (the code that raises the error, runbooks, past verified fixes), waits for a human,
-executes through the Action API only, verifies recovery (rolling back and escalating if it fails), and writes a
-JSON + Markdown incident report.
+<img src="incident_zero/docs/assets/banner.svg" alt="Incident Zero: an AI on-call engineer, from alert to safe, approved fix" width="100%">
 
-> **Status.** Tested live on the full running demo for the brief's first three faults: payment failure passes end
-> to end; the intermittent cart failure is missed (needs per-operation alerting); the one-product catalog failure
-> did not reach telemetry in its run. Details and open gaps: [LIVE_RESULTS](incident_zero/docs/LIVE_RESULTS.md).
+<br>
 
-Docs: [ARCHITECTURE](incident_zero/docs/ARCHITECTURE.md) · [REQUIREMENTS](incident_zero/docs/REQUIREMENTS.md) ·
-[CHECKPOINTS](incident_zero/docs/CHECKPOINTS.md) · [TEAM_FORM](incident_zero/docs/TEAM_FORM.md) ·
-[BUILD_LOG](incident_zero/docs/BUILD_LOG.md) (what is built and how) · [LIVE_RESULTS](incident_zero/docs/LIVE_RESULTS.md)
-· [report schema](incident_zero/schema/incident_report.schema.json) · [brief](incident_zero/docs/hackathon_brief.json)
-· real reports: [INC-0002](incident_zero/docs/live_reports/INC-0002.md),
-[INC-0003](incident_zero/docs/live_reports/INC-0003.md)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
+![OpenTelemetry Demo](https://img.shields.io/badge/target-OpenTelemetry%20Demo-425CC7?logo=opentelemetry&logoColor=white)
+![LangGraph](https://img.shields.io/badge/agents-LangGraph-1c3c3c)
+![React + Vite](https://img.shields.io/badge/control%20room-React%20%2B%20Vite-61DAFB?logo=react&logoColor=black)
+![Tests: 92 passing](https://img.shields.io/badge/tests-92%20passing-2ea44f)
+![Fixes: human-approved only](https://img.shields.io/badge/fixes-human--approved%20only-f97362)
 
-## Setup
+**[Results](#results)** · **[How it works](#how-it-works)** · **[Control Room](#the-control-room)** · **[Quickstart](#quickstart)** · **[Safety](#safety-by-construction)** · **[Docs](#documentation)**
 
-```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -e '.[dev,incident_zero]'           # from the repository root (Python 3.10+)
-git clone --depth 1 https://github.com/open-telemetry/opentelemetry-demo ~/Developer/opentelemetry-demo
-cp incident_zero/incident_zero.example.yaml incident_zero.yaml   # set demo_dir
-cp .env.example .env                            # the model and (optionally) SMTP
-incident_zero ui-build                          # builds the Control Room (needs Node 20+)
-pytest                                          # 86 tests, no Docker or model needed
+</div>
+
+---
+
+Incident Zero is an AI on-call engineer for the [OpenTelemetry Demo](https://github.com/open-telemetry/opentelemetry-demo).
+It handles an incident from alert to report:
+
+- **Detects** the incident from live telemetry.
+- **Investigates** with real traces, metrics, logs and container state.
+- **Names the root cause**, citing evidence that exists in the collected data.
+- **Proposes a fix** chosen only from the Action API's allowed actions and grounded in retrieved knowledge: the code
+  that raises the error, runbooks, and past fixes that were verified.
+- **Waits for a human** to approve the exact plan shown.
+- **Executes** through the Action API only, then **verifies** recovery. If recovery fails it rolls back and
+  escalates.
+- **Writes a report** in JSON and Markdown.
+
+Built for the Bosch hackathon *"Incident Zero: Build an AI On-Call Engineer"* at PES University.
+
+> **No evidence, no claim. No approval, no action.** The model can suggest a diagnosis and a plan. Code checks
+> every quote against the evidence ledger, every action against the allowed catalog, and every approval against a
+> SHA-256 hash of the exact plan shown. The agent process has no Docker write client: changes go through the Action
+> API, a separate process.
+
+## Results
+
+On the full running demo (28 containers, real telemetry, real Action API calls, Gemini `gemini-3.5-flash-lite`), the
+practice Judge scored **10 different injected faults at 10/10** against hidden ground truth:
+
+| Fault | Diagnosis | Fix executed |
+|---|---|---|
+| Payment charge fails | payment · application error | `paymentFailure` flag off |
+| Catalog fails for one product | product-catalog · application error | `productCatalogFailure` flag off |
+| Recommendation cache leak | recommendation · memory | flag off + restart |
+| Ad service high CPU | ad · CPU | `adHighCpu` flag off |
+| Ad service GC pressure | ad | `adManualGc` flag off |
+| Catalog database down | astronomy-db · container down | restart `astronomy-db` |
+| Quote packet loss | quote · network | restart `quote`, `shipping` |
+| Valkey cache down | valkey-cart · container down | restart `valkey-cart` |
+| Cart service stopped | cart · container down | restart `cart` |
+| Catalog latency | product-catalog · network | restart `product-catalog` |
+
+The full write-up, including misses, invalid runs and bugs found while testing, is in
+[LIVE_RESULTS](incident_zero/docs/LIVE_RESULTS.md). Example reports:
+[INC-0002](incident_zero/docs/live_reports/INC-0002.md) · [INC-0003](incident_zero/docs/live_reports/INC-0003.md).
+
+## How it works
+
+Nine agents run in one process. Five of them are plain code and four use the model. Each model step has a
+deterministic fallback, so the system still works with no model configured.
+
+```mermaid
+flowchart LR
+    S["1 · Sentinel<br/>alert rules"] --> I["2 · Investigator<br/>telemetry tool loop"]
+    I --> D["3 · Diagnostician<br/>root cause + quotes"]
+    D --> A{"4 · Evidence<br/>Auditor"}
+    A -- "fails: collect more" --> I
+    A -- passes --> P["5 · Planner<br/>knowledge-grounded fix"]
+    P --> G["6 · Approval Gate<br/>human, hash-bound"]
+    G --> X["7 · Executor<br/>Action API only"]
+    X --> V{"8 · Verifier"}
+    V -- recovered --> R["9 · Reporter<br/>JSON + Markdown"]
+    V -- "not recovered" --> RB["roll back + escalate"]
+    K[("Knowledge<br/>code · runbooks · memory")] -.-> P
+    KS["Kill switch"] -. freezes .-> X
 ```
-
-The model is configured in `.env`: `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY` (any OpenAI-compatible
-endpoint, Anthropic, or a local Ollama model). Without one, every agent falls back to its deterministic path. SMTP
-settings in `.env` enable approval emails.
-
-## Run
-
-```bash
-incident_zero demo up          # the demo + Jaeger, Prometheus, OpenSearch, Grafana (about 6 GB of Docker memory)
-incident_zero action-api       # the mock Action API, its own process (the only thing that changes the system)
-incident_zero up               # Sentinel + agents + Control Room on http://127.0.0.1:8700
-incident_zero up --eval        # the same with practice switched off entirely
-```
-
-Practice (not in eval mode): `/practice` in the Control Room, or `incident_zero practice list | run <id> | runs`.
-`practice run blind` injects one of the hidden blind scenarios at random and reveals which only after scoring;
-`practice campaign blind --as <name> --live` runs them all. For the jury, run `up --eval` and inject faults from
-outside (the demo's flag page at `http://localhost:8080/feature`, `docker stop|pause|update`, `pumba`).
-
-## The agents
 
 | # | Agent | Model | Job |
 |---|---|---|---|
-| 1 | Sentinel | no | Alert rules on error rate, p95 latency, traffic, silence, container state; correlates alerts into one incident |
-| 2 | Investigator | yes (LangGraph tool loop; playbook fallback) | Picks the next telemetry tool from findings so far; every result becomes evidence `E<n>` |
-| 3 | Diagnostician | yes (rules fallback) | Component, root cause, confidence, claims that quote evidence |
-| 4 | Evidence Auditor | no | Cited ids exist, quotes are verbatim, every alert explained; else back to the Investigator |
-| 5 | Remediation Planner | yes (rules fallback) | Retrieves knowledge `K<n>` (code search, runbooks, incident memory); allowed actions only, each citing knowledge verbatim, validated by code, previewed as a dry run, hashed |
-| 6 | Approval Gate | human | Approve / reject / send back; timeout escalates |
-| 7 | Executor | no | Action API only; kill switch checked before every call |
-| 8 | Verifier | no | Re-checks the triggering signals; rolls back and escalates if not recovered |
-| 9 | Reporter | wording only | Report built by code from the record, validated against the schema |
+| 1 | **Sentinel** | no | Alert rules on error rate, p95 latency, traffic, silence and container state. Correlates alerts into one incident |
+| 2 | **Investigator** | yes (LangGraph tool loop; playbook fallback) | Picks the next telemetry tool from what it has found so far. Every result becomes evidence `E<n>` |
+| 3 | **Diagnostician** | yes (rules fallback) | Component, root cause, confidence, and claims that quote the evidence |
+| 4 | **Evidence Auditor** | no | Checks that cited ids exist, quotes are verbatim and every alert is explained. Otherwise sends the incident back to the Investigator |
+| 5 | **Remediation Planner** | yes (rules fallback) | Retrieves knowledge `K<n>` and chooses allowed actions only. Each action cites knowledge verbatim, is validated by code, previewed as a dry run and hashed |
+| 6 | **Approval Gate** | human | Approve, reject or send back. A timeout escalates |
+| 7 | **Executor** | no | Calls the Action API only. Checks the kill switch before every call |
+| 8 | **Verifier** | no | Re-checks the triggering signals. Rolls back and escalates if they have not recovered |
+| 9 | **Reporter** | wording only | Code builds the report from the incident record and validates it against the jury's schema |
 
-## How the approval gate works
+### How the agent knows which fix to propose
 
-The plan (actions, parameters, reasons, the diagnosis summary) is hashed when it is shown. Approving requires the
-approver's name and that hash: a plan that changed after it was displayed cannot be approved. Send back needs a note,
-which goes to the Investigator. No decision before `approval_timeout_s` escalates the incident and nothing runs.
-Decide in the Control Room (`/`, `/approvals`, `/incidents/<id>/plan`) or with
-`incident_zero decide INC-0001 approve --as <name>`.
+Telemetry shows what is broken but not how to fix it. Once the diagnosis passes the audit, the Planner retrieves
+three kinds of knowledge (BM25-ranked):
 
-## How the kill switch works
+1. **Code.** It searches the demo's source for the error text from the audited evidence. The line that raises the
+   error, and the feature-flag condition that decides whether that line runs, become knowledge (for example
+   `src/payment/charge.js:48`, guarded by `paymentFailure`). It finds flags by reading how the code evaluates them,
+   not from a hand-written list.
+2. **Runbooks** ([`knowledge/runbooks/*.md`](incident_zero/knowledge/runbooks)), organised by symptom. They say what
+   fixes each kind of failure, and when no allowed action does, which means escalate.
+3. **Incident memory.** Every live fix the Verifier judged is stored with its outcome, so a plan can show a track
+   record such as *"recovered 3 of 3 similar past incidents"*.
 
-"Stop all" (top bar, `POST /api/stop`, or `incident_zero stop --as <name>`, which works without the server) writes
-the STOP file, tells the Action API to refuse every execution, and rolls back reversible actions executed in the last
-`kill_rollback_window_s`. Agents freeze where they stand. It stays engaged until an explicit resume. Dry run is on at
-start and shown in the top bar; going live is a confirmed, deliberate switch.
+Whether a fix was right is only proven afterwards. The triggering signals must stay clear for two consecutive
+checks. If they do not, the Verifier rolls back and escalates.
 
-## Integrity
+### Architecture
 
-- Feature-flag data is stripped from every trace, log and metric before it becomes evidence; flagd's logs and flag
-  queries are refused. Tests enforce it, and the agents cannot import the flag file or the practice ground truth.
-- Evidence quotes are checked verbatim by code: invented evidence cannot reach a human. The same check applies to
-  the plan: every action cites retrieved knowledge (`K<n>`) verbatim, or it is dropped.
+<img src="incident_zero/docs/architecture.svg" alt="Incident Zero architecture: OpenTelemetry Demo, telemetry backends, agent process, Action API, Control Room, practice harness and safety controls" width="100%">
 
-## How the agent knows which fix to propose
+The one-page version is in [ARCHITECTURE](incident_zero/docs/ARCHITECTURE.md).
 
-Telemetry says what is broken, not how to fix it. After the diagnosis passes the audit, the Planner retrieves:
+## The Control Room
 
-1. **Code**: error text from the audited evidence is searched in the demo's source (`src/`, without `flagd*`). The
-   line that raises it, and the feature-flag condition that decides whether that line runs, become knowledge
-   (e.g. `src/payment/charge.js:48`, guarded by `paymentFailure`). Flags are found by reading how the code
-   evaluates them, not from a hand-written list.
-2. **Runbooks** (`incident_zero/knowledge/runbooks/*.md`), organised by symptom: what fixes which kind of failure,
-   and when no allowed action does (escalate).
-3. **Incident memory** (`.incident_zero/memory.jsonl`): every live fix the Verifier judged, with its outcome; the
-   plan shows the track record ("recovered 2 of 2 similar past incidents").
+A React + Vite app served at `http://127.0.0.1:8700`. It streams agent activity over Server-Sent Events and keeps
+**Stop all** in the header at all times.
 
-Whether the fix was right is proven only afterwards: the Verifier checks the triggering signals, and rolls back
-and escalates if they do not clear.
+<img src="incident_zero/docs/assets/control-room-plan.png" alt="Control Room plan view: a toggle_feature_flag action citing the code line and incident memory, the retrieved knowledge list, the execution and the verification" width="100%">
+
+<sub>**Plan and approval.** The proposed action cites the exact code line that raises the error (`K1`) and past
+verified fixes (`K6`). The right-hand column shows the knowledge the Planner retrieved, then the execution and the
+verification result. The plan hash (`#94834fa717`) is what the approver signs.</sub>
+
+<table>
+<tr>
+<td width="50%"><img src="incident_zero/docs/assets/control-room-diagnosis.png" alt="Diagnosis view with root cause, confidence and evidence quotes, and a passed evidence audit"></td>
+<td width="50%"><img src="incident_zero/docs/assets/control-room-incidents.png" alt="Incident list with state, root cause, confidence and affected services"></td>
+</tr>
+<tr>
+<td><sub><b>Diagnosis.</b> Root cause, category and confidence. Every claim quotes evidence (<code>E1</code>, <code>E3</code>, …) that the Auditor checked verbatim.</sub></td>
+<td><sub><b>Incidents.</b> Every incident with its state, root cause, confidence and affected services. Reports download as JSON + Markdown.</sub></td>
+</tr>
+</table>
+
+Pages: **War room** (live activity) · **Incidents** (timeline, evidence, diagnosis, plan, report) · **Agents** ·
+**Services** (request metrics against the baseline) · **Practice**.
+
+## Quickstart
+
+You need Python 3.10+, Node 20+ (for the UI build) and Docker Desktop with about 6–8 GB of memory.
+
+```bash
+git clone https://github.com/preeeetham/ground_zero.git && cd ground_zero
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e '.[dev,incident_zero]'
+
+git clone --depth 1 https://github.com/open-telemetry/opentelemetry-demo ~/Developer/opentelemetry-demo
+cp incident_zero/incident_zero.example.yaml incident_zero.yaml   # set demo_dir
+cp .env.example .env                                             # model + optional SMTP
+
+incident_zero ui-build        # builds the Control Room
+pytest                        # 92 tests, no Docker or model needed
+```
+
+**Model.** Set `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL` and `LLM_API_KEY` in `.env`. Any OpenAI-compatible
+endpoint works (OpenAI, Gemini, Groq, OpenRouter), as do Anthropic and a local Ollama model. With no model
+configured, every agent uses its deterministic path. The SMTP settings in `.env` turn on approval and escalation
+emails.
+
+### Run
+
+```bash
+incident_zero demo up          # the demo + Jaeger, Prometheus, OpenSearch, Grafana
+incident_zero action-api       # the mock Action API, in its own process
+incident_zero up               # Sentinel + agents + Control Room on http://127.0.0.1:8700
+incident_zero up --eval        # the same, with practice mode switched off entirely
+```
+
+To trigger an incident, inject a fault from outside: use the demo's flag page at `http://localhost:8080/feature`,
+run `docker stop|pause|update`, or use `pumba`. Then watch the War room.
+
+<details>
+<summary><b>CLI reference</b></summary>
+
+| Command | What it does |
+|---|---|
+| `incident_zero status` | Mode, kill switch state, recent incidents |
+| `incident_zero decide INC-0001 approve --as <name>` | Approve, reject or send back a plan |
+| `incident_zero stop --as <name>` / `resume` | Engage or release the kill switch. Works without the server |
+| `incident_zero report INC-0001` | Print an incident report |
+| `incident_zero practice list \| run <id> \| runs` | Practice scenarios (not in eval mode) |
+| `incident_zero practice run blind` | Inject a hidden scenario at random. Reveals which one only after scoring |
+| `incident_zero practice campaign blind --as <name> --live` | Run every blind scenario end to end |
+
+</details>
+
+## Safety by construction
+
+| Guard | Behaviour |
+|---|---|
+| **Dry run first** | Starts in dry run. Going live is a deliberate, confirmed and logged switch shown in the top bar |
+| **Hash-bound approval** | The plan (actions, parameters, reasons, citations) is hashed with SHA-256 when it is shown. Approval needs the approver's name and that hash, so a plan that changed after it was displayed cannot be approved |
+| **Timeout escalates** | If nobody decides within `approval_timeout_s`, the incident escalates and nothing runs. *Send back* requires a note, which goes to the Investigator |
+| **Kill switch** | *Stop all* (UI, `POST /api/stop`, CLI or the STOP file) freezes the agents, makes the Action API refuse every call, and rolls back reversible actions from the last `kill_rollback_window_s`. It stays on until someone explicitly resumes |
+| **Action API only** | The agent process holds an HTTP client, not a Docker write client. An import test enforces this |
+| **No invented evidence** | Code checks diagnosis quotes (`E<n>`) and plan citations (`K<n>`) verbatim. Anything unverifiable is dropped before a human sees it |
+| **No flag peeking** | Feature-flag data is stripped from every trace, log and metric before it becomes evidence. flagd's logs, the flag file and the practice ground truth are never read. Flag knowledge comes from service code and is used only for planning |
+| **Verified or rolled back** | The triggering signals must stay clear for two consecutive checks. Otherwise the Verifier rolls back and escalates |
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [ARCHITECTURE](incident_zero/docs/ARCHITECTURE.md) | One-page architecture, components, decision process, safety controls |
+| [REQUIREMENTS](incident_zero/docs/REQUIREMENTS.md) | The brief's requirements and how each one is met |
+| [LIVE_RESULTS](incident_zero/docs/LIVE_RESULTS.md) | Every live run on the real demo, including misses and the fixes they led to |
+| [BUILD_LOG](incident_zero/docs/BUILD_LOG.md) | What was built, in what order, and how |
+| [CHECKPOINTS](incident_zero/docs/CHECKPOINTS.md) · [HANDOFF](incident_zero/docs/HANDOFF.md) | Milestones and the operator handoff |
+| [Report schema](incident_zero/schema/incident_report.schema.json) | The JSON schema every report is validated against |
+| [TEAM_FORM](incident_zero/docs/TEAM_FORM.md) · [brief](incident_zero/docs/hackathon_brief.json) | Submission form and the hackathon brief |
+
+## Repository layout
+
+```
+incident_zero/
+  agents/        sentinel, investigator, diagnostician, auditor, planner, approval, executor, verifier, reporter
+  telemetry/     Prometheus, Jaeger v3, OpenSearch and Docker backends; the Investigator's tools
+  knowledge/     code index, runbooks, incident memory, BM25 search
+  actions/       Action API client, action catalog, feature flags, the mock Action API server
+  server/        HTTP + SSE server behind the Control Room
+  ui/            Control Room (React, Vite, TypeScript)
+  practice/      fault simulator, scenarios, campaigns and the Judge
+  schema/        incident report JSON schema
+  tests/         offline test suite with in-memory fakes for Prometheus, Jaeger, Docker and logs
+  docs/          architecture, requirements, live results, real incident reports
+  orchestrator.py · safety.py · store.py · evidence.py · redact.py · llm*.py · cli.py
+```
 
 ## Known limitations
 
-- Action API parameter names are a guess; the real API is one adapter (`actions/client.py`).
-- Faults whose cause is a CPU/memory limit or a detached network have no allowed fix: the agent escalates.
-- `toggle_feature_flag` is chosen from the demo's **source code** (which flag guards the failing line); flag
-  values are never read. Confirm with the organisers that reading service code to plan a fix is acceptable.
-- With the smallest model tier, some diagnoses fall back to rules; the Control Room marks them "backup rules".
-- Kafka (`compose.full.yaml`) is off by default to fit 8 GB of Docker memory, so Kafka incidents are untested.
-- Diagnosis accuracy on unseen incidents is measured with the practice Judge, not guaranteed.
+- The Action API's parameter names are an assumption. The real API plugs in through one adapter,
+  [`actions/client.py`](incident_zero/actions/client.py).
+- Faults caused by a CPU or memory limit, or by a detached network, have no allowed fix, so the agent escalates.
+- `toggle_feature_flag` is chosen by reading the demo's **source code** to find which flag guards the failing line.
+  Flag values are never read.
+- With the smallest model tier, some diagnoses fall back to rules. The Control Room labels these "backup rules".
+- Kafka (`compose.full.yaml`) is off by default to fit in 8 GB of Docker memory, so Kafka incidents are untested.
+- Accuracy on unseen incidents is measured with the practice Judge, not guaranteed.
+
+## Acknowledgements
+
+Application under test: the [OpenTelemetry Demo](https://github.com/open-telemetry/opentelemetry-demo) (Apache-2.0).
+Fault injection: [Pumba](https://github.com/alexei-led/pumba). Agent loop:
+[LangGraph](https://github.com/langchain-ai/langgraph).
