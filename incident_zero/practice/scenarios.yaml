@@ -1,0 +1,228 @@
+# Practice incidents (REQUIREMENTS P1–P4). `truth` is the hidden ground truth the Judge scores against; it is never
+# visible to the agents (they cannot import incident_zero.practice). `split: tune` scenarios are for improving the
+# agent; `split: holdout` ones are only for scoring it, to mimic the jury's unseen incidents.
+#
+# truth.actions: allowed actions that fix it. `escalate: true`: no allowed action fixes it (the Action API cannot
+# change resource limits or reattach a network), so the right outcome is to propose nothing and escalate.
+#
+# fault kinds: flag {flag, variant} | requests {path, interval_s, parallel} | load {users} | stop | pause | kill_loop {interval_s} | cpu {cpus} | memory {memory_mb}
+#              | delay {delay_ms, jitter_ms} | loss {percent} | disconnect
+scenarios:
+  # ---------------- application faults (the demo's own switches)
+  # `signal`: PromQL that must be > 0 during the run for the fault to have reached telemetry at all; a run where it
+  # stays 0 is invalid, not a failure of the agents. `fixes`: the exact fix the Judge requires to have run.
+  - id: payment-charge-fails
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Turns on the `paymentFailure` feature flag at 100 % in flagd, so the payment service's charge code throws an \"Invalid token\" error on every charge."
+    effect: "Every checkout fails at the payment step: payment's Charge operation and checkout's PlaceOrder return errors, and the error rate on payment and checkout jumps."
+    title: Payment service fails when charging
+    split: tune
+    faults: [{kind: flag, flag: paymentFailure, variant: "100%"}]
+    signal: 'sum(increase(traces_span_metrics_calls_total{service_name="payment",status_code="STATUS_CODE_ERROR"}[5m]))'
+    truth: {components: [payment], categories: [application_error], actions: [toggle_feature_flag],
+            fixes: [{action: toggle_feature_flag, parameters: {flag: paymentFailure, enabled: false}}]}
+  - id: cart-intermittent
+    title: Cart service fails intermittently
+    split: tune
+    faults: [{kind: flag, flag: cartFailure, variant: "50%"}]
+    signal: 'sum(increase(traces_span_metrics_calls_total{service_name="cart",span_name=~".*EmptyCart.*",status_code="STATUS_CODE_ERROR"}[5m]))'
+    truth: {components: [cart], categories: [application_error], actions: [toggle_feature_flag],
+            fixes: [{action: toggle_feature_flag, parameters: {flag: cartFailure, enabled: false}}]}
+  - id: catalog-one-product
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Turns on the `productCatalogFailure` flag, which makes product-catalog fail lookups of one specific product (OLJCESPC7Z), and sends a real visitor to that product page every 3 s so the failure shows in telemetry."
+    effect: "Only that product's page breaks: GetProduct errors on product-catalog, and frontend requests for it fail, while the rest of the shop works."
+    title: Product catalog fails for one specific product
+    split: tune
+    # the fault fails one product only: real visits to that product's page make sure it reaches telemetry
+    faults: [{kind: flag, flag: productCatalogFailure, variant: "on"},
+             {kind: requests, path: /api/products/OLJCESPC7Z, interval_s: 3}]
+    signal: 'sum(increase(traces_span_metrics_calls_total{service_name="product-catalog",status_code="STATUS_CODE_ERROR"}[5m]))'
+    truth: {components: [product-catalog], categories: [application_error], actions: [toggle_feature_flag],
+            fixes: [{action: toggle_feature_flag, parameters: {flag: productCatalogFailure, enabled: false}}]}
+  - id: recommendation-cache-leak
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Turns on the `recommendationCacheFailure` flag, which makes the recommendation service grow an in-memory cache without limit."
+    effect: "recommendation's memory climbs towards its limit, responses slow down, and the container can be OOM-killed and restart."
+    title: Memory leak in recommendation from a runaway cache
+    split: tune
+    faults: [{kind: flag, flag: recommendationCacheFailure, variant: "on"}]
+    truth: {components: [recommendation], categories: [resource_memory, application_error, resource_cpu],
+            actions: [toggle_feature_flag, restart_service]}
+  - id: ad-high-cpu
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Turns on the `adHighCpu` flag, which makes the ad service run a CPU-heavy loop while serving ads."
+    effect: "ad's CPU jumps to several cores (~400 % seen live) while its latency, traffic and errors barely move: only resource metrics show it."
+    title: High CPU in the ad service
+    split: tune
+    faults: [{kind: flag, flag: adHighCpu, variant: "on"}]
+    truth: {components: [ad], categories: [resource_cpu, application_error], actions: [toggle_feature_flag]}
+  - id: homepage-flood
+    title: Traffic flood on the homepage
+    split: tune
+    # found live: the loadGeneratorFloodHomepage flag never reached the running load generator (no flood happened),
+    # so the flood is made the way it happens in real life: many more users arrive
+    # 40, not 80: at 80 browser users the load generator itself crashed and came back at 5 (found live), so
+    # the flood undid itself; 40 is still 8x normal
+    faults: [{kind: load, users: 40}]
+    truth: {components: [frontend-proxy, frontend, load-generator], categories: [traffic],
+            actions: [throttle_load_generator],
+            fixes: [{action: throttle_load_generator, parameters: {users: 5}}]}
+  - id: payment-unreachable
+    title: Payment unreachable from checkout
+    split: holdout
+    faults: [{kind: flag, flag: paymentUnreachable, variant: "on"}]
+    truth: {components: [payment, checkout], categories: [application_error, dependency_failure, network],
+            actions: [toggle_feature_flag]}
+  - id: ad-gc-pressure
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Turns on the `adManualGc` flag, which makes the ad service force full garbage collections, and sends 4 parallel visitors to the ad endpoint so it is under real load."
+    effect: "ad pauses repeatedly for garbage collection: its latency rises sharply and CPU goes up; frontend calls to ad slow down."
+    title: Heavy garbage collection in the ad service
+    split: holdout
+    # found live: at the demo's 0.35 req/s to ad the forced GCs had no measurable effect (CPU, latency, errors all
+    # flat), so nothing could or should alert; real traffic to the ad API makes the GC cost what it is under load
+    faults: [{kind: flag, flag: adManualGc, variant: "on"},
+             {kind: requests, path: "/api/data?contextKeys=telescopes", interval_s: 0.05, parallel: 4}]
+    truth: {components: [ad], categories: [resource_cpu, resource_memory, application_error],
+            actions: [toggle_feature_flag, restart_service]}
+  # ---------------- infrastructure faults
+  - id: cart-stopped
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Stops the cart container (docker stop)."
+    effect: "The cart service is gone: adding to cart, viewing the cart and checkout fail; frontend and checkout see connection errors to cart."
+    title: Cart container stopped
+    split: tune
+    faults: [{kind: stop, service: cart}]
+    truth: {components: [cart], categories: [container_down], actions: [restart_service]}
+  - id: valkey-down
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Stops the valkey-cart container, the Redis-compatible cache where cart stores every cart."
+    effect: "cart cannot reach its store: cart operations fail with connection errors, so the shop cannot add to or read carts, and checkout fails."
+    title: Cache (valkey) unavailable
+    split: tune
+    faults: [{kind: stop, service: valkey-cart}]
+    truth: {components: [valkey-cart], categories: [container_down, dependency_failure], actions: [restart_service]}
+  - id: catalog-db-down
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Stops the astronomy-db container, the PostgreSQL database behind product-catalog."
+    effect: "product-catalog cannot load products: product pages, listings and checkout fail; its datastore metrics go stale."
+    title: Database (astronomy-db) unavailable
+    split: holdout
+    faults: [{kind: stop, service: astronomy-db}]
+    truth: {components: [astronomy-db], categories: [container_down, dependency_failure], actions: [restart_service]}
+  - id: payment-paused
+    title: Payment process frozen
+    split: holdout
+    faults: [{kind: pause, service: payment}]
+    truth: {components: [payment], categories: [container_down], actions: [restart_service]}
+  - id: shipping-crash-loop
+    title: Shipping keeps restarting
+    split: holdout
+    faults: [{kind: kill_loop, service: shipping, interval_s: 20}]
+    truth: {components: [shipping], categories: [container_down], actions: [restart_service]}
+  - id: checkout-cpu-starved
+    title: Checkout starved of CPU
+    split: tune
+    faults: [{kind: cpu, service: checkout, cpus: 0.02}]
+    truth: {components: [checkout], categories: [resource_cpu], actions: [], escalate: true}
+  - id: currency-memory-starved
+    title: Currency starved of memory
+    split: holdout
+    faults: [{kind: memory, service: currency, memory_mb: 6}]
+    truth: {components: [currency], categories: [resource_memory, container_down], actions: [], escalate: true}
+  - id: catalog-latency
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Adds 1500 ms (±200 ms jitter) of network delay to product-catalog's network interface with netem (tc), from a helper container."
+    effect: "Every call to product-catalog takes 1.5 s longer: p95 latency rises on product-catalog and on everything that calls it (frontend, checkout, recommendation)."
+    title: Network latency on product-catalog
+    split: tune
+    faults: [{kind: delay, service: product-catalog, delay_ms: 1500, jitter_ms: 200}]
+    truth: {components: [product-catalog], categories: [network], actions: [restart_service]}
+  - id: quote-packet-loss
+    verified: true   # scored 10/10 live (docs/LIVE_RESULTS.md)
+    injects: "Drops 40 % of the packets on the quote service's network interface with netem (tc), from a helper container."
+    effect: "Calls to quote retry and time out: shipping-quote requests become slow or fail, which shows up on shipping and checkout."
+    title: Packet loss on quote
+    split: holdout
+    faults: [{kind: loss, service: quote, percent: 40}]
+    truth: {components: [quote], categories: [network], actions: [restart_service]}
+  - id: currency-partitioned
+    title: Currency disconnected from the network
+    split: holdout
+    faults: [{kind: disconnect, service: currency}]
+    truth: {components: [currency], categories: [network, container_down], actions: [], escalate: true}
+  # ---------------- combinations
+  - id: combo-valkey-and-payment
+    title: Cache down while payment fails
+    split: holdout
+    faults: [{kind: stop, service: valkey-cart}, {kind: flag, flag: paymentFailure, variant: "100%"}]
+    truth: {components: [valkey-cart, payment], categories: [container_down, dependency_failure, application_error],
+            actions: [restart_service, toggle_feature_flag], all_components: true}
+  - id: combo-latency-and-cpu
+    title: Catalog latency plus checkout CPU starvation
+    split: holdout
+    faults: [{kind: delay, service: product-catalog, delay_ms: 1200, jitter_ms: 100},
+             {kind: cpu, service: checkout, cpus: 0.02}]
+    truth: {components: [product-catalog, checkout], categories: [network, resource_cpu],
+            actions: [restart_service], all_components: true}
+  # ---------------- blind set (split: blind): never used to tune the agents. `practice run blind` picks one at
+  # random and hides which until it is scored; `practice campaign blind` runs them all. Only the code paths and the
+  # runbooks the agents retrieve at run time can lead them to these fixes: nothing in the agents names these faults.
+  - id: email-memory-leak
+    title: Memory leak in the email service
+    split: blind
+    faults: [{kind: flag, flag: emailMemoryLeak, variant: "1000x"}]
+    truth: {components: [email], categories: [resource_memory, resource_cpu, application_error],
+            actions: [toggle_feature_flag, restart_service],
+            fixes: [{action: toggle_feature_flag, parameters: {flag: emailMemoryLeak, enabled: false}}]}
+  - id: shipping-intl-slowdown
+    title: International shipping quotes slow down
+    split: blind
+    faults: [{kind: flag, flag: intlShippingSlowdown, variant: "5sec"}]
+    truth: {components: [shipping], categories: [network, application_error, unknown],
+            actions: [toggle_feature_flag],
+            fixes: [{action: toggle_feature_flag, parameters: {flag: intlShippingSlowdown, enabled: false}}]}
+  - id: catalog-lock-contention
+    title: Lock contention in the product catalog
+    split: blind
+    faults: [{kind: flag, flag: productCatalogLockContention, variant: "on"}]
+    truth: {components: [product-catalog], categories: [network, application_error, resource_cpu, unknown],
+            actions: [toggle_feature_flag],
+            fixes: [{action: toggle_feature_flag, parameters: {flag: productCatalogLockContention, enabled: false}}]}
+  - id: ad-sporadic-failure
+    title: Ad service fails a share of its requests
+    split: blind
+    faults: [{kind: flag, flag: adFailure, variant: "on"}]
+    signal: 'sum(increase(traces_span_metrics_calls_total{service_name="ad",status_code="STATUS_CODE_ERROR"}[5m]))'
+    truth: {components: [ad], categories: [application_error], actions: [toggle_feature_flag],
+            fixes: [{action: toggle_feature_flag, parameters: {flag: adFailure, enabled: false}}]}
+  - id: kafka-queue-slow
+    title: Order queue processing delayed
+    split: blind
+    faults: [{kind: flag, flag: kafkaQueueProblems, variant: "3sec"}]
+    truth: {components: [checkout, kafka, accounting, fraud-detection], categories: [application_error, network,
+            dependency_failure, unknown], actions: [toggle_feature_flag],
+            fixes: [{action: toggle_feature_flag, parameters: {flag: kafkaQueueProblems, enabled: false}}]}
+  - id: kafka-stopped
+    title: Message broker stopped
+    split: blind
+    faults: [{kind: stop, service: kafka}]
+    truth: {components: [kafka], categories: [container_down, dependency_failure], actions: [restart_service]}
+  - id: quote-paused
+    title: Quote service frozen
+    split: blind
+    faults: [{kind: pause, service: quote}]
+    truth: {components: [quote], categories: [container_down, dependency_failure], actions: [restart_service]}
+  - id: recommendation-memory-starved
+    title: Recommendation starved of memory
+    split: blind
+    faults: [{kind: memory, service: recommendation, memory_mb: 24}]
+    truth: {components: [recommendation], categories: [resource_memory, container_down], actions: [],
+            escalate: true}
+  - id: combo-db-and-cart
+    title: Catalog database down while cart fails
+    split: blind
+    faults: [{kind: stop, service: astronomy-db}, {kind: flag, flag: cartFailure, variant: "100%"}]
+    truth: {components: [astronomy-db, cart], categories: [container_down, dependency_failure, application_error],
+            actions: [restart_service, toggle_feature_flag], all_components: true}
