@@ -1,0 +1,203 @@
+{
+  "incident_id": "INC-0002",
+  "status": "resolved",
+  "summary": "The checkout service suffered a 100% error rate due to payment requests failing with invalid tokens, while the fraud-detection service experienced intermittent processing of asynchronous Kafka events. The incident was resolved by toggling a feature flag to turn off paymentFailure, after which all triggering signals cleared for two consecutive checks.",
+  "timeline": [
+    {
+      "timestamp": "2026-10-23T09:30:29Z",
+      "event": "A1 Error rate: checkout error_ratio=1.000 over 2m (threshold 0.050, baseline 0.000)",
+      "details": "sentinel"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:29Z",
+      "event": "A2 Telemetry silent: fraud-detection rps=0 over 2m (baseline 0.09)",
+      "details": "sentinel"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:29Z",
+      "event": "A3 Error rate: payment error_ratio=1.000 over 2m (threshold 0.050, baseline 0.000)",
+      "details": "sentinel"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:29Z",
+      "event": "opened INC-0002: Error rate on checkout",
+      "details": "sentinel"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:29Z",
+      "event": "INC-0002: detected -> investigating",
+      "details": "system"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:43Z",
+      "event": "INC-0002: investigating -> diagnosing",
+      "details": "system"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:46Z",
+      "event": "INC-0002: diagnosing -> auditing",
+      "details": "system"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:46Z",
+      "event": "INC-0002: auditing -> planning",
+      "details": "system"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:48Z",
+      "event": "INC-0002: planning -> awaiting_approval",
+      "details": "system"
+    },
+    {
+      "timestamp": "2026-10-23T09:30:48Z",
+      "event": "approval needed for INC-0002: toggle_feature_flag {'flag': 'paymentFailure', 'enabled': False}",
+      "details": "approval"
+    },
+    {
+      "timestamp": "2026-10-23T09:35:13Z",
+      "event": "preetham approved the plan",
+      "details": "human"
+    },
+    {
+      "timestamp": "2026-10-23T09:35:13Z",
+      "event": "INC-0002: awaiting_approval -> executing",
+      "details": "system"
+    },
+    {
+      "timestamp": "2026-10-23T09:35:13Z",
+      "event": "toggle_feature_flag {'flag': 'paymentFailure', 'enabled': False}: ok - turned paymentFailure off",
+      "details": "executor"
+    },
+    {
+      "timestamp": "2026-10-23T09:35:13Z",
+      "event": "INC-0002: executing -> verifying",
+      "details": "system"
+    },
+    {
+      "timestamp": "2026-10-23T09:35:44Z",
+      "event": "signals clear (1/2)",
+      "details": "verifier"
+    },
+    {
+      "timestamp": "2026-10-23T09:35:59Z",
+      "event": "signals clear (2/2)",
+      "details": "verifier"
+    },
+    {
+      "timestamp": "2026-10-23T09:35:59Z",
+      "event": "INC-0002: verifying -> resolved",
+      "details": "system"
+    }
+  ],
+  "diagnosis": {
+    "affected_component": "payment, fraud-detection",
+    "root_cause": "payment: Payment requests are failing due to an invalid token error. [application_error]; fraud-detection: The service is operating normally via asynchronous Kafka message consumption, triggering a telemetry silent alert due to lack of direct synchronous requests. [traffic]",
+    "confidence": 1.0,
+    "alternatives_considered": [
+      "fraud-detection (traffic, confidence 0.90): The service is operating normally via asynchronous Kafka message consumption, triggering a telemetry silent alert due to lack of direct synchronous requests."
+    ]
+  },
+  "evidence": [
+    {
+      "source": "metric",
+      "observation": "[E3] alert A3 error_rate: payment error_ratio=1.000 over 2m (threshold 0.050, baseline 0.000)",
+      "timestamp": "2026-10-23T09:30:29Z",
+      "reference": "sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\",status_code=\"STATUS_CODE_ERROR\",service_name=\"payment\"}[2m]))",
+      "supports": "payment (application_error): Payment service error ratio is 1.000"
+    },
+    {
+      "source": "trace",
+      "observation": "[E9] error span: payment oteldemo.PaymentService/Charge duration_ms=3.0 message=Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "timestamp": "2026-10-23T09:30:35Z",
+      "reference": "trace 7484da007766e44f162161bade08ad4f",
+      "supports": "payment (application_error): Payment service charge operation returns invalid token error"
+    },
+    {
+      "source": "log",
+      "observation": "[E10] 2026-10-23T09:30:08.467Z payment warn Payment request failed. Invalid token. demo.user_context.loyalty_level=gold",
+      "timestamp": "2026-10-23T09:30:37Z",
+      "reference": "logs of payment via opensearch",
+      "supports": "payment (application_error): Payment service logs show warnings for invalid tokens"
+    },
+    {
+      "source": "metric",
+      "observation": "[E2] alert A2 telemetry_silent: fraud-detection rps=0 over 2m (baseline 0.09)",
+      "timestamp": "2026-10-23T09:30:29Z",
+      "reference": "sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\",service_name=\"fraud-detection\"}[2m]))",
+      "supports": "fraud-detection (traffic): Fraud detection telemetry silent alert triggered due to zero rps over 2m"
+    },
+    {
+      "source": "container_health",
+      "observation": "[E12] fraud-detection: state=running exit_code=0 oom_killed=false restarts=0 uptime_s=459 health=None networks=opentelemetry-demo cpu_limit=None memory_limit_mb=300",
+      "timestamp": "2026-10-23T09:30:39Z",
+      "reference": "docker inspect/stats fraud-detection",
+      "supports": "fraud-detection (traffic): Fraud detection container is running successfully with zero restarts"
+    },
+    {
+      "source": "log",
+      "observation": "[E15] 2026-10-23T09:30:36.740008305Z fraud-detection INFO Consumed record with orderId: 672c817f-cec4-11f1-897c-c23a2a9d7a48, and updated total count to: 11",
+      "timestamp": "2026-10-23T09:30:42Z",
+      "reference": "logs of fraud-detection via opensearch",
+      "supports": "fraud-detection (traffic): Fraud detection logs show successful asynchronous consumption of records from Kafka"
+    },
+    {
+      "source": "metric",
+      "observation": "[E1] alert A1 error_rate: checkout error_ratio=1.000 over 2m (threshold 0.050, baseline 0.000)",
+      "timestamp": "2026-10-23T09:30:29Z",
+      "reference": "sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\",status_code=\"STATUS_CODE_ERROR\",service_name=\"checkout\"}[2m]))",
+      "supports": "the alert that opened this incident"
+    },
+    {
+      "source": "metric",
+      "observation": "[E2] alert A2 telemetry_silent: fraud-detection rps=0 over 2m (baseline 0.09)",
+      "timestamp": "2026-10-23T09:30:29Z",
+      "reference": "sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\",service_name=\"fraud-detection\"}[2m]))",
+      "supports": "the alert that opened this incident"
+    },
+    {
+      "source": "metric",
+      "observation": "[E3] alert A3 error_rate: payment error_ratio=1.000 over 2m (threshold 0.050, baseline 0.000)",
+      "timestamp": "2026-10-23T09:30:29Z",
+      "reference": "sum by (service_name) (rate(traces_span_metrics_calls_total{span_kind=~\"SPAN_KIND_SERVER|SPAN_KIND_CONSUMER\",status_code=\"STATUS_CODE_ERROR\",service_name=\"payment\"}[2m]))",
+      "supports": "the alert that opened this incident"
+    }
+  ],
+  "proposed_action": {
+    "action": "toggle_feature_flag",
+    "parameters": {
+      "flag": "paymentFailure",
+      "enabled": false
+    },
+    "reason": "Disable the faulty payment failure code path in the payment service to resolve invalid token errors.",
+    "dry_run": false
+  },
+  "approval": {
+    "required": true,
+    "decision": "approved",
+    "approver": "preetham",
+    "timestamp": "2026-10-23T09:35:13Z"
+  },
+  "execution": {
+    "attempted": true,
+    "action_api_only": true,
+    "action_result": "toggle_feature_flag: ok - turned paymentFailure off",
+    "rollback_performed": false,
+    "notes": ""
+  },
+  "verification": {
+    "checked": true,
+    "recovered": true,
+    "signals_checked": [
+      "Error rate on checkout",
+      "Error rate on payment",
+      "Telemetry silent on fraud-detection"
+    ],
+    "notes": "all 3 triggering signals clear for 2 consecutive checks"
+  },
+  "prevention": [
+    "Release payment behind a canary that is rolled back automatically on error-rate regression",
+    "Add a contract test for the failing operation of payment",
+    "Rate-limit the entry point (fraud-detection) per client and autoscale the frontend on request rate"
+  ],
+  "limitations": []
+}

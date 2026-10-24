@@ -1,0 +1,453 @@
+{
+  "document": {
+    "title": "Incident Zero: Build an AI On-Call Engineer",
+    "event": "One-day AI hackathon at PES University",
+    "organizer_brand_visible": "Bosch",
+    "theme": "Agentic AI for IT Operations: from alert to safe, approved fix",
+    "application": {
+      "name": "OpenTelemetry Demo",
+      "alias": "Astronomy Shop",
+      "description": "An open-source, cloud-native microservices e-commerce application running locally. It emits traces, metrics, and logs, and includes switches for realistic failures.",
+      "repository_text_visible": "GitHub link shown on slide but not fully legible in the photos"
+    },
+    "problem_statement": "Build an AI On-Call Engineer that responds to a production incident in a cloud-native application, investigates it using real tools, identifies the root cause with evidence, and resolves it safely with human approval."
+  },
+  "solution_workflow": [
+    {
+      "step": 1,
+      "name": "Detect the incident",
+      "requirements": [
+        "Receive an alert, such as an error-rate or latency threshold on the demo metrics.",
+        "Start an investigation automatically."
+      ]
+    },
+    {
+      "step": 2,
+      "name": "Investigate with tools",
+      "requirements": [
+        "Query traces, metrics, logs, and container health.",
+        "Choose the next tool based on findings so far instead of dumping all data into one prompt."
+      ]
+    },
+    {
+      "step": 3,
+      "name": "Diagnose with evidence",
+      "requirements": [
+        "Name the failing component and root cause.",
+        "Include confidence and exact traces, log lines, or metric values supporting the diagnosis.",
+        "Evidence must exist in collected data; invented evidence is penalized."
+      ]
+    },
+    {
+      "step": 4,
+      "name": "Propose a safe fix",
+      "requirements": [
+        "Choose only from allowed runbook actions exposed by the Action API.",
+        "Give a short reason for the proposed action.",
+        "Support dry-run mode and a kill switch."
+      ]
+    },
+    {
+      "step": 5,
+      "name": "Ask for human approval",
+      "requirements": [
+        "Show the diagnosis and proposed plan to a human.",
+        "Make no changes without explicit approval."
+      ]
+    },
+    {
+      "step": 6,
+      "name": "Act and verify",
+      "requirements": [
+        "Execute the approved action through the Action API only.",
+        "Check health metrics to confirm recovery.",
+        "If recovery fails, roll back and escalate."
+      ]
+    },
+    {
+      "step": 7,
+      "name": "Report",
+      "requirements": [
+        "Produce a concise incident report with timeline, root cause, evidence, action taken, and prevention recommendation."
+      ]
+    }
+  ],
+  "practice_incident_types_visible": {
+    "application_faults": [
+      "Payment service fails when charging",
+      "Cart service fails intermittently",
+      "Product catalog fails for one specific product",
+      "Memory leak in the recommendation service caused by a runaway cache",
+      "High CPU or heavy garbage collection in the ad service",
+      "Traffic flood on the homepage"
+    ],
+    "infrastructure_faults": [
+      "A service container is stopped or keeps restarting",
+      "Cache or database becomes unavailable",
+      "Network latency or packet loss between two services",
+      "A service is starved of CPU or memory"
+    ],
+    "evaluation_note": "The slide says ten practice incidents are published at kickoff and final evaluation uses unseen incidents, including infrastructure faults and combinations. The agent must reason from telemetry, not read feature-flag settings."
+  },
+  "provided_environment": [
+    {
+      "name": "OpenTelemetry Demo",
+      "description": "Microservices store including frontend, cart, checkout, payment, product catalog, recommendation, ad, shipping, and more; run with Docker Compose and a Locust load generator.",
+      "source": "Open-source GitHub repository"
+    },
+    {
+      "name": "Telemetry",
+      "description": "Traces, metrics, and logs from services through the OpenTelemetry Collector, with bundled trace and metrics viewers.",
+      "source": "Comes with demo"
+    },
+    {
+      "name": "Failure flags",
+      "description": "Built-in switches for realistic failures, managed by flagd.",
+      "source": "Comes with demo"
+    },
+    {
+      "name": "faultctl",
+      "description": "Command-line tool to inject a practice incident (a flag or infrastructure fault) and reset everything.",
+      "source": "Team"
+    },
+    {
+      "name": "Action API",
+      "description": "Only allowed way for the agent to change the system: restart a service, toggle a feature flag, throttle the load generator, or scale a service (Kubernetes only). Every call is logged.",
+      "source": "Team"
+    },
+    {
+      "name": "Offline incident bundles",
+      "description": "Recorded telemetry for each practice incident for laptops that cannot run the full demo.",
+      "source": "Team"
+    },
+    {
+      "name": "LLM access",
+      "description": "API key with a spend limit; open-source or local models are also allowed.",
+      "source": "Team"
+    },
+    {
+      "name": "Template repository",
+      "description": "Agent skeleton, required output format (JSON schema), README template, and team form.",
+      "source": "Team"
+    }
+  ],
+  "required_final_deliverables": [
+    {
+      "name": "Source code",
+      "details": "Team repository forked from the template, with a README covering setup, how to run, how the approval gate and kill switch work, and known limitations."
+    },
+    {
+      "name": "Architecture overview",
+      "details": "One page describing components, tools used by the agent, decision process, and safety controls. A photo of a whiteboard sketch is acceptable."
+    },
+    {
+      "name": "Incident reports",
+      "details": "Reports produced by the agent for the practice incidents it handled, in the provided JSON schema plus readable form."
+    },
+    {
+      "name": "Evaluation note",
+      "details": "Which practice incidents the agent got right and wrong in your own testing, and why."
+    },
+    {
+      "name": "Team form",
+      "details": "Team name, members, who built which part, tools and AI models used (including AI coding assistants), and third-party libraries."
+    }
+  ],
+  "rules": [
+    "Teams of 5. All code is written on the day, from 09:15; commits before then are not allowed.",
+    "Open-source libraries and agent frameworks are allowed. AI coding assistants are allowed if declared in the team form; every member must be able to explain and change the code they submit.",
+    "The slide also says: 'All three members must commit code.' This conflicts with the 'Teams of 5' rule; confirm the intended team size with the organizers.",
+    "Mentors help teams get unblocked; they do not write code. No outside help.",
+    "The agent changes the demo only through the Action API, and only after human approval.",
+    "Reading feature-flag settings to diagnose, or tampering with the demo, faultctl, hidden incidents, or scoring harness means disqualification.",
+    "Be honest about what does not work. Stating a limitation costs nothing; hiding a failure in the demo loses points."
+  ],
+  "optional_stretch_goals": [
+    {
+      "name": "Incident memory",
+      "description": "Reuse earlier incident reports to diagnose a repeat incident faster."
+    },
+    {
+      "name": "Reviewer agent",
+      "description": "A second agent tries to disprove the diagnosis before a human sees it."
+    },
+    {
+      "name": "Calibrated confidence",
+      "description": "Show that stated confidence matches how often the agent is right on the practice set."
+    },
+    {
+      "name": "Chat-style approval",
+      "description": "The on-call human approves or rejects from a simple chat UI or dashboard."
+    },
+    {
+      "name": "Prevention",
+      "description": "After fixing, suggest a code, config, or alerting change that would stop the incident recurring."
+    }
+  ],
+  "incident_report_json_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Incident Report",
+    "type": "object",
+    "required": [
+      "incident_id",
+      "status",
+      "summary",
+      "timeline",
+      "diagnosis",
+      "evidence",
+      "proposed_action",
+      "approval",
+      "execution",
+      "verification",
+      "prevention",
+      "limitations"
+    ],
+    "properties": {
+      "incident_id": {
+        "type": "string",
+        "description": "Practice incident identifier supplied by the environment."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "resolved",
+          "mitigated",
+          "unresolved",
+          "escalated",
+          "false_alarm"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "timeline": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "timestamp",
+            "event"
+          ],
+          "properties": {
+            "timestamp": {
+              "type": "string",
+              "description": "ISO-8601 timestamp"
+            },
+            "event": {
+              "type": "string"
+            },
+            "details": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "diagnosis": {
+        "type": "object",
+        "required": [
+          "affected_component",
+          "root_cause",
+          "confidence"
+        ],
+        "properties": {
+          "affected_component": {
+            "type": "string"
+          },
+          "root_cause": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "alternatives_considered": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "evidence": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "source",
+            "observation",
+            "supports"
+          ],
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "trace",
+                "metric",
+                "log",
+                "container_health",
+                "deployment_history",
+                "other"
+              ]
+            },
+            "observation": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reference": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Trace ID, log reference, metric query, or other retrievable source reference."
+            },
+            "supports": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "proposed_action": {
+        "type": "object",
+        "required": [
+          "action",
+          "reason",
+          "dry_run"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Must be an allowed Action API action."
+          },
+          "parameters": {
+            "type": "object"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "approval": {
+        "type": "object",
+        "required": [
+          "required",
+          "decision"
+        ],
+        "properties": {
+          "required": {
+            "const": true
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "not_requested"
+            ]
+          },
+          "approver": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "execution": {
+        "type": "object",
+        "required": [
+          "attempted",
+          "action_api_only"
+        ],
+        "properties": {
+          "attempted": {
+            "type": "boolean"
+          },
+          "action_api_only": {
+            "const": true
+          },
+          "action_result": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rollback_performed": {
+            "type": "boolean"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "verification": {
+        "type": "object",
+        "required": [
+          "checked",
+          "recovered"
+        ],
+        "properties": {
+          "checked": {
+            "type": "boolean"
+          },
+          "recovered": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "signals_checked": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "prevention": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "limitations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "additionalProperties": false
+  },
+  "incident_reports": [],
+  "notes": [
+    "This JSON is an OCR-based structured extraction of the visible slides, plus a proposed incident-report schema because the organizers' actual JSON schema is not legible/provided in the photos.",
+    "Before final submission, replace incident_report_json_schema with the official schema from the template repository if it differs, and populate incident_reports with genuine outputs from your agent. Do not submit fabricated diagnoses or evidence.",
+    "The visible slide has a timing discrepancy: the deliverables slide says code freeze at 16:30, while the rules say code is written from 09:15. Treat 16:30 as the stated submission/code-freeze time and confirm details with organizers."
+  ]
+}

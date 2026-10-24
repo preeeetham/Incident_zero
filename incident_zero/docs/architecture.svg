@@ -1,0 +1,288 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1090" viewBox="0 0 1600 1090" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Incident Zero architecture</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#15803d"/>
+    </marker>
+    <filter id="s" x="-5%" y="-5%" width="110%" height="120%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .box{fill:#ffffff;stroke:#cbd5e1;stroke-width:1.2}
+      .h{font-size:15px;font-weight:700;fill:#0f172a}
+      .sub{font-size:11.5px;fill:#64748b}
+      .t{font-size:12px;fill:#1e293b}
+      .s{font-size:10.5px;fill:#475569}
+      .chip{fill:#f1f5f9;stroke:#e2e8f0}
+      .ct{font-size:10.5px;fill:#334155;text-anchor:middle}
+      .n{font-size:13px;font-weight:700}
+      .lbl{font-size:10.5px;fill:#475569;font-style:italic}
+      .line{fill:none;stroke:#475569;stroke-width:1.5}
+    </style>
+  </defs>
+
+  <rect width="1600" height="1090" fill="#f8fafc"/>
+
+  <!-- title -->
+  <text x="40" y="44" font-size="26" font-weight="800" fill="#0f172a">Incident Zero</text>
+  <text x="232" y="44" font-size="16" fill="#475569">AI on-call engineer for the OpenTelemetry Demo · detect → investigate → diagnose → audit → plan → approve → act → verify → report</text>
+  <text x="40" y="68" class="sub">Nine agents in one process; every write goes through a separate Action API. Telemetry says what is broken, knowledge says how to fix it, a human approves the exact plan, and the Verifier proves it worked.</text>
+
+  <!-- ================= ROW A ================= -->
+  <!-- Demo -->
+  <rect x="40" y="110" width="520" height="190" rx="12" class="box" filter="url(#s)"/>
+  <rect x="40" y="110" width="6" height="190" rx="3" fill="#0ea5e9"/>
+  <text x="58" y="136" class="h">OpenTelemetry Demo</text>
+  <text x="222" y="136" class="sub">28 containers · Docker Compose · 8 GB</text>
+  <g>
+    <rect x="54" y="150" width="92" height="24" rx="6" class="chip"/><text x="100" y="166" class="ct">frontend-proxy</text>
+    <rect x="154" y="150" width="92" height="24" rx="6" class="chip"/><text x="200" y="166" class="ct">frontend</text>
+    <rect x="254" y="150" width="92" height="24" rx="6" class="chip"/><text x="300" y="166" class="ct">checkout</text>
+    <rect x="354" y="150" width="92" height="24" rx="6" class="chip"/><text x="400" y="166" class="ct">cart</text>
+    <rect x="454" y="150" width="92" height="24" rx="6" class="chip"/><text x="500" y="166" class="ct">payment</text>
+    <rect x="54" y="182" width="92" height="24" rx="6" class="chip"/><text x="100" y="198" class="ct">product-catalog</text>
+    <rect x="154" y="182" width="92" height="24" rx="6" class="chip"/><text x="200" y="198" class="ct">recommendation</text>
+    <rect x="254" y="182" width="92" height="24" rx="6" class="chip"/><text x="300" y="198" class="ct">ad</text>
+    <rect x="354" y="182" width="92" height="24" rx="6" class="chip"/><text x="400" y="198" class="ct">currency</text>
+    <rect x="454" y="182" width="92" height="24" rx="6" class="chip"/><text x="500" y="198" class="ct">shipping</text>
+    <rect x="54" y="214" width="92" height="24" rx="6" class="chip"/><text x="100" y="230" class="ct">quote</text>
+    <rect x="154" y="214" width="92" height="24" rx="6" class="chip"/><text x="200" y="230" class="ct">email</text>
+    <rect x="254" y="214" width="92" height="24" rx="6" class="chip"/><text x="300" y="230" class="ct">accounting</text>
+    <rect x="354" y="214" width="92" height="24" rx="6" class="chip"/><text x="400" y="230" class="ct">fraud-detection</text>
+    <rect x="454" y="214" width="92" height="24" rx="6" class="chip"/><text x="500" y="230" class="ct">image-provider</text>
+    <rect x="54" y="246" width="92" height="24" rx="6" fill="#ecfeff" stroke="#a5f3fc"/><text x="100" y="262" class="ct">valkey-cart</text>
+    <rect x="154" y="246" width="92" height="24" rx="6" fill="#ecfeff" stroke="#a5f3fc"/><text x="200" y="262" class="ct">astronomy-db</text>
+    <rect x="254" y="246" width="92" height="24" rx="6" fill="#ecfeff" stroke="#a5f3fc"/><text x="300" y="262" class="ct">kafka</text>
+    <rect x="354" y="246" width="92" height="24" rx="6" fill="#fef9c3" stroke="#fde68a"/><text x="400" y="262" class="ct">flagd</text>
+    <rect x="454" y="246" width="92" height="24" rx="6" fill="#fef9c3" stroke="#fde68a"/><text x="500" y="262" class="ct">load-generator</text>
+  </g>
+  <text x="54" y="290" class="s">+ otel-collector (span_metrics connector) · prometheus · jaeger · opensearch · grafana · opamp</text>
+
+  <!-- Backends -->
+  <rect x="620" y="110" width="420" height="190" rx="12" class="box" filter="url(#s)"/>
+  <rect x="620" y="110" width="6" height="190" rx="3" fill="#6366f1"/>
+  <text x="638" y="136" class="h">Telemetry backends</text>
+  <text x="790" y="136" class="sub">read only</text>
+  <rect x="636" y="148" width="388" height="30" rx="7" fill="#eef2ff"/>
+  <text x="648" y="168" class="t"><tspan font-weight="700">Prometheus</tspan>  span metrics (calls, duration) · docker_stats CPU/mem</text>
+  <rect x="636" y="184" width="388" height="30" rx="7" fill="#eef2ff"/>
+  <text x="648" y="204" class="t"><tspan font-weight="700">Jaeger v2</tspan>  traces via /api/v3 (OTLP JSON → spans)</text>
+  <rect x="636" y="220" width="388" height="30" rx="7" fill="#eef2ff"/>
+  <text x="648" y="240" class="t"><tspan font-weight="700">OpenSearch</tspan>  service logs (flat dotted keys)</text>
+  <rect x="636" y="256" width="388" height="30" rx="7" fill="#eef2ff"/>
+  <text x="648" y="276" class="t"><tspan font-weight="700">Docker Engine</tspan>  state, restarts, OOM, health, limits</text>
+
+  <!-- Practice -->
+  <rect x="1100" y="110" width="460" height="190" rx="12" class="box" filter="url(#s)"/>
+  <rect x="1100" y="110" width="6" height="190" rx="3" fill="#f43f5e"/>
+  <text x="1118" y="136" class="h">Practice harness</text>
+  <text x="1250" y="136" class="sub">off in eval mode · agents cannot import it</text>
+  <text x="1118" y="162" class="t"><tspan font-weight="700">Fault injector</tspan>  flags · stop · pause · kill loop · CPU/memory</text>
+  <text x="1118" y="180" class="t">limits · netem delay/loss · disconnect · real user traffic · Locust flood</text>
+  <text x="1118" y="206" class="t"><tspan font-weight="700">Hidden truth + Judge</tspan>  /10: detect 1 · component 3 · category 1 ·</text>
+  <text x="1118" y="224" class="t">audit 2 · exact fix executed 2 · recovery verified 1</text>
+  <text x="1118" y="250" class="t"><tspan font-weight="700">Campaign</tspan>  settle → inject → approve as test operator → verify →</text>
+  <text x="1118" y="268" class="t">revert → score · 20 tune/holdout + 9 blind scenarios</text>
+
+  <!-- A arrows -->
+  <path d="M560,205 L616,205" class="line" marker-end="url(#a)"/>
+  <text x="566" y="198" class="lbl">OTLP</text>
+  <path d="M1330,110 L1330,94 L300,94 L300,106" class="line" stroke="#f43f5e" stroke-dasharray="5 4" marker-end="url(#a)"/>
+  <text x="700" y="89" class="lbl" fill="#be123c">inject faults (Docker, flag file, Locust) · revert after every incident closes</text>
+
+  <!-- ================= ROW B: agent process ================= -->
+  <rect x="40" y="350" width="1060" height="430" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="7 4"/>
+  <text x="58" y="374" class="h">Agent process</text>
+  <text x="660" y="771" class="sub">incident_zero up · Python · no Docker write client (import test)</text>
+
+  <!-- feed from backends -->
+  <path d="M830,300 L830,330 L180,330 L180,396" class="line" marker-end="url(#a)"/>
+  <path d="M360,330 L360,396" class="line" marker-end="url(#a)"/>
+  <text x="420" y="324" class="lbl">PromQL · Jaeger v3 · OpenSearch query · docker inspect</text>
+
+  <!-- row 1 nodes -->
+  <g>
+    <rect x="64" y="400" width="230" height="100" rx="10" fill="#eff6ff" stroke="#93c5fd"/>
+    <text x="78" y="422" class="n" fill="#1d4ed8">1 · Sentinel</text><text x="190" y="422" class="s">no model</text>
+    <text x="78" y="440" class="s">rules every 15 s, must hold 2 ticks</text>
+    <text x="78" y="456" class="s">error_rate · operation_errors · latency_p95</text>
+    <text x="78" y="471" class="s">traffic_spike · telemetry_silent · container_</text>
+    <text x="78" y="486" class="s">down/restarts · resource_saturation</text>
+
+    <rect x="314" y="400" width="230" height="100" rx="10" fill="#eff6ff" stroke="#93c5fd"/>
+    <text x="328" y="422" class="n" fill="#1d4ed8">2 · Investigator</text>
+    <text x="328" y="440" class="s">LangGraph loop: model picks next tool</text>
+    <text x="328" y="456" class="s">overview · service_metrics · find_traces</text>
+    <text x="328" y="471" class="s">trace_detail · search_logs · container_*</text>
+    <text x="328" y="486" class="s">dependencies · datastore · promql → E&lt;n&gt;</text>
+
+    <rect x="564" y="400" width="230" height="100" rx="10" fill="#f5f3ff" stroke="#c4b5fd"/>
+    <text x="578" y="422" class="n" fill="#6d28d9">3 · Diagnostician</text>
+    <text x="578" y="440" class="s">component · category · cause · confidence</text>
+    <text x="578" y="456" class="s">claims quote evidence verbatim</text>
+    <text x="578" y="471" class="s">false-alarm verdict needs health evidence</text>
+    <text x="578" y="486" class="s">rule fallback over the same facts</text>
+
+    <rect x="814" y="400" width="230" height="100" rx="10" fill="#f5f3ff" stroke="#c4b5fd"/>
+    <text x="828" y="422" class="n" fill="#6d28d9">4 · Evidence Auditor</text><text x="980" y="422" class="s">code</text>
+    <text x="828" y="440" class="s">evidence ids exist</text>
+    <text x="828" y="456" class="s">quotes are exact substrings</text>
+    <text x="828" y="471" class="s">every active alert explained</text>
+    <text x="828" y="486" class="s">fail → re-investigate (max 3 rounds)</text>
+  </g>
+  <path d="M294,450 L310,450" class="line" marker-end="url(#a)"/>
+  <path d="M544,450 L560,450" class="line" marker-end="url(#a)"/>
+  <path d="M794,450 L810,450" class="line" marker-end="url(#a)"/>
+  <path d="M929,400 L929,386 L500,386 L500,396" class="line" stroke="#dc2626" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+  <text x="650" y="382" class="lbl" fill="#b91c1c">audit failed: collect more evidence</text>
+
+  <!-- 4 -> 5 -->
+  <path d="M929,500 L929,530 L154,530 L154,556" class="line" stroke="#15803d" marker-end="url(#ag)"/>
+  <text x="560" y="524" class="lbl" fill="#15803d">audit passed (or false alarm: close, no plan)</text>
+
+  <!-- row 2 nodes -->
+  <g>
+    <rect x="64" y="560" width="180" height="96" rx="10" fill="#fffbeb" stroke="#fcd34d"/>
+    <text x="78" y="582" class="n" fill="#b45309">5 · Planner</text>
+    <text x="78" y="600" class="s">allowed actions + params only</text>
+    <text x="78" y="615" class="s">every action cites K&lt;n&gt; verbatim</text>
+    <text x="78" y="630" class="s">API dry-run preview per action</text>
+    <text x="78" y="645" class="s">nothing fits → escalate</text>
+
+    <rect x="260" y="560" width="180" height="96" rx="10" fill="#fffbeb" stroke="#fcd34d"/>
+    <text x="274" y="582" class="n" fill="#b45309">6 · Approval Gate</text>
+    <text x="274" y="600" class="s">human approves the SHA-256</text>
+    <text x="274" y="615" class="s">hash of the exact plan shown</text>
+    <text x="274" y="630" class="s">UI · CLI · email · send back</text>
+    <text x="274" y="645" class="s">timeout → escalate</text>
+
+    <rect x="456" y="560" width="180" height="96" rx="10" fill="#f0fdf4" stroke="#86efac"/>
+    <text x="470" y="582" class="n" fill="#15803d">7 · Executor</text>
+    <text x="470" y="600" class="s">HTTP to the Action API only</text>
+    <text x="470" y="615" class="s">kill switch checked before</text>
+    <text x="470" y="630" class="s">every call · dry run or live</text>
+    <text x="470" y="645" class="s">results → evidence ledger</text>
+
+    <rect x="652" y="560" width="180" height="96" rx="10" fill="#f0fdf4" stroke="#86efac"/>
+    <text x="666" y="582" class="n" fill="#15803d">8 · Verifier</text>
+    <text x="666" y="600" class="s">same signals clear 2× in a row</text>
+    <text x="666" y="615" class="s">rare op: ≥ 6 calls since the fix</text>
+    <text x="666" y="630" class="s">container: no restart after fix</text>
+    <text x="666" y="645" class="s">else rollback + escalate</text>
+
+    <rect x="848" y="560" width="196" height="96" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="862" y="582" class="n" fill="#334155">9 · Reporter</text>
+    <text x="862" y="600" class="s">JSON (schema-validated)</text>
+    <text x="862" y="615" class="s">+ Markdown report</text>
+    <text x="862" y="630" class="s">verified outcome → memory</text>
+    <text x="862" y="645" class="s">resolved · escalated · false alarm</text>
+  </g>
+  <path d="M244,608 L256,608" class="line" marker-end="url(#a)"/>
+  <path d="M440,608 L452,608" class="line" marker-end="url(#a)"/>
+  <path d="M636,608 L648,608" class="line" marker-end="url(#a)"/>
+  <path d="M832,608 L844,608" class="line" marker-end="url(#a)"/>
+
+  <!-- knowledge + LLM -->
+  <rect x="64" y="690" width="560" height="62" rx="10" fill="#fff7ed" stroke="#fdba74"/>
+  <text x="78" y="710" class="n" fill="#c2410c">Knowledge (RAG · BM25)</text>
+  <text x="250" y="710" class="s">read by the Planner only, never to diagnose</text>
+  <rect x="78" y="720" width="180" height="22" rx="6" fill="#ffedd5"/><text x="168" y="735" class="ct">code search: error line → its flag</text>
+  <rect x="266" y="720" width="160" height="22" rx="6" fill="#ffedd5"/><text x="346" y="735" class="ct">runbooks by symptom</text>
+  <rect x="434" y="720" width="180" height="22" rx="6" fill="#ffedd5"/><text x="524" y="735" class="ct">incident memory (verified)</text>
+  <path d="M154,690 L154,660" class="line" marker-end="url(#a)"/>
+
+  <rect x="870" y="690" width="210" height="62" rx="10" fill="#fdf4ff" stroke="#f0abfc"/>
+  <text x="884" y="710" class="n" fill="#a21caf">LLM</text><text x="920" y="710" class="s">agents 2 · 3 · 5, JSON only</text>
+  <text x="884" y="727" class="s">OpenAI-compatible (Gemini),</text>
+  <text x="884" y="742" class="s">Anthropic or Ollama · rules if none</text>
+
+  <!-- ================= right column ================= -->
+  <rect x="1140" y="350" width="420" height="230" rx="12" class="box" filter="url(#s)"/>
+  <rect x="1140" y="350" width="6" height="230" rx="3" fill="#0d9488"/>
+  <text x="1158" y="376" class="h">Control Room</text>
+  <text x="1270" y="376" class="sub">React · SSE · http://127.0.0.1:8700</text>
+  <text x="1158" y="404" class="t"><tspan font-weight="700">War Room</tspan>  stability %, container tiles, traffic and</text>
+  <text x="1158" y="421" class="t">error charts with alert ▼ / fix ◆ / resolved ● markers</text>
+  <text x="1158" y="447" class="t"><tspan font-weight="700">Incidents</tspan>  evidence ledger · diagnosis · knowledge ·</text>
+  <text x="1158" y="464" class="t">plan with citations · live activity log · report</text>
+  <text x="1158" y="490" class="t"><tspan font-weight="700">Decide</tspan>  approve · reject · send back (bound to hash)</text>
+  <text x="1158" y="516" class="t"><tspan font-weight="700">Mode</tspan>  dry run ↔ live · kill switch · practice page</text>
+  <text x="1158" y="548" class="s">CLI mirror: incident_zero status · decide · stop · resume · report · practice</text>
+  <path d="M1100,470 L1136,470" class="line" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text x="1104" y="462" class="lbl">HTTP</text>
+
+  <rect x="1140" y="600" width="420" height="170" rx="12" class="box" filter="url(#s)"/>
+  <rect x="1140" y="600" width="6" height="170" rx="3" fill="#64748b"/>
+  <text x="1158" y="626" class="h">State</text>
+  <text x="1204" y="626" class="sub">.incident_zero/ (JSON files, no database)</text>
+  <text x="1158" y="652" class="t">incidents + append-only evidence ledger (E&lt;n&gt;)</text>
+  <text x="1158" y="676" class="t">event bus → Server-Sent Events stream to the UI</text>
+  <text x="1158" y="700" class="t">memory.jsonl · verified outcomes per incident</text>
+  <text x="1158" y="724" class="t">reports (JSON + Markdown) · state.json (mode)</text>
+  <text x="1158" y="748" class="t">practice runs · campaign results + evaluation note</text>
+  <path d="M1100,690 L1136,690" class="line" marker-end="url(#a)"/>
+
+  <!-- ================= ROW C ================= -->
+  <!-- Executor -> Action API -->
+  <path d="M546,656 L546,676 L640,676 L640,790 L300,790 L300,806" class="line" stroke="#15803d" marker-end="url(#ag)"/>
+  <text x="648" y="800" class="lbl" fill="#15803d">HTTP + bearer token</text>
+
+  <rect x="40" y="810" width="520" height="170" rx="12" class="box" filter="url(#s)"/>
+  <rect x="40" y="810" width="6" height="170" rx="3" fill="#16a34a"/>
+  <text x="58" y="836" class="h">Action API</text>
+  <text x="148" y="836" class="sub">separate process · :8701 · owns every write</text>
+  <rect x="58" y="850" width="150" height="26" rx="7" fill="#dcfce7"/><text x="133" y="867" class="ct" font-weight="700">restart_service</text>
+  <rect x="216" y="850" width="160" height="26" rx="7" fill="#dcfce7"/><text x="296" y="867" class="ct" font-weight="700">toggle_feature_flag</text>
+  <rect x="384" y="850" width="160" height="26" rx="7" fill="#dcfce7"/><text x="464" y="867" class="ct" font-weight="700">throttle_load_generator</text>
+  <rect x="58" y="884" width="150" height="26" rx="7" class="chip"/><text x="133" y="901" class="ct">scale_service (k8s only)</text>
+  <rect x="216" y="884" width="160" height="26" rx="7" class="chip"/><text x="296" y="901" class="ct">dry-run preview</text>
+  <rect x="384" y="884" width="160" height="26" rx="7" class="chip"/><text x="464" y="901" class="ct">rollback by execution id</text>
+  <text x="58" y="934" class="s">Docker SDK (restart) · flag file written in place (flagd watches the bind mount)</text>
+  <text x="58" y="951" class="s">Locust /swarm (users) · kill switch: refuses every call, rolls back recent actions</text>
+  <text x="58" y="968" class="s">catalog of allowed actions + parameter schemas is served to the Planner</text>
+  <path d="M40,895 L22,895 L22,205 L36,205" class="line" stroke="#15803d" marker-end="url(#ag)"/>
+  <text x="16" y="560" class="lbl" fill="#15803d" transform="rotate(-90 16 560)">restart · toggle flag · throttle load</text>
+
+  <!-- Safety -->
+  <rect x="620" y="820" width="480" height="160" rx="12" class="box" filter="url(#s)"/>
+  <rect x="620" y="820" width="6" height="160" rx="3" fill="#dc2626"/>
+  <text x="638" y="846" class="h">Safety controls</text>
+  <text x="638" y="870" class="t">• Dry run at start; going live is a deliberate, logged switch</text>
+  <text x="638" y="890" class="t">• Kill switch (UI · API · CLI · STOP file): freeze + roll back</text>
+  <text x="638" y="910" class="t">• Approval bound to the plan's SHA-256: any edit voids it</text>
+  <text x="638" y="930" class="t">• Quotes checked verbatim: no invented evidence or reasons</text>
+  <text x="638" y="950" class="t">• Flag settings redacted from telemetry; flagd never read</text>
+  <text x="638" y="970" class="t">• Agents have no Docker write client (import test)</text>
+
+  <!-- Thresholds -->
+  <rect x="1140" y="800" width="420" height="180" rx="12" class="box" filter="url(#s)"/>
+  <rect x="1140" y="800" width="6" height="180" rx="3" fill="#2563eb"/>
+  <text x="1158" y="826" class="h">Detection and verification math</text>
+  <text x="1158" y="850" class="s">rate window 2m (span metrics land ~1/min) · per-operation window 5m</text>
+  <text x="1158" y="868" class="s">baseline: learned from quiet ticks, else same query 10 min ago</text>
+  <text x="1158" y="886" class="s">error ratio ≥ 5% · p95 &gt; max(800 ms, factor × baseline)</text>
+  <text x="1158" y="904" class="s">traffic: entry rps &gt; 3× baseline, or Locust users &gt; 3× normal (5)</text>
+  <text x="1158" y="922" class="s">CPU ≥ 80% of a core and ≥ 3× its own baseline</text>
+  <text x="1158" y="940" class="s">memory evidence only ≥ own baseline + 8 pts (or OOM kill)</text>
+  <text x="1158" y="958" class="s">symptoms of a diagnosed root cause join it, held 300 s after it resolves</text>
+
+  <!-- legend -->
+  <g transform="translate(40,1020)">
+    <text x="0" y="14" class="sub" font-weight="700">Legend</text>
+    <path d="M60,10 L100,10" class="line" marker-end="url(#a)"/><text x="108" y="14" class="s">data / control flow</text>
+    <path d="M230,10 L270,10" class="line" stroke="#15803d" marker-end="url(#ag)"/><text x="278" y="14" class="s">writes (only via the Action API)</text>
+    <path d="M460,10 L500,10" class="line" stroke="#dc2626" stroke-dasharray="4 3" marker-end="url(#ar)"/><text x="508" y="14" class="s">audit loop-back</text>
+    <path d="M620,10 L660,10" class="line" stroke="#f43f5e" stroke-dasharray="5 4" marker-end="url(#a)"/><text x="668" y="14" class="s">practice only</text>
+    <rect x="770" y="2" width="14" height="14" rx="3" fill="#eff6ff" stroke="#93c5fd"/><text x="790" y="14" class="s">detect / investigate</text>
+    <rect x="910" y="2" width="14" height="14" rx="3" fill="#f5f3ff" stroke="#c4b5fd"/><text x="930" y="14" class="s">diagnose / audit</text>
+    <rect x="1040" y="2" width="14" height="14" rx="3" fill="#fffbeb" stroke="#fcd34d"/><text x="1060" y="14" class="s">plan / approve</text>
+    <rect x="1160" y="2" width="14" height="14" rx="3" fill="#f0fdf4" stroke="#86efac"/><text x="1180" y="14" class="s">act / verify</text>
+    <text x="0" y="44" class="s">Source: incident_zero/ (agents/, telemetry/, knowledge/, actions/, server/, ui/, practice/) · docs/ARCHITECTURE.md · 2026-10-24</text>
+  </g>
+</svg>
