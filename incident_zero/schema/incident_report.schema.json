@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Incident Report",
+  "type": "object",
+  "required": [
+    "incident_id",
+    "status",
+    "summary",
+    "timeline",
+    "diagnosis",
+    "evidence",
+    "proposed_action",
+    "approval",
+    "execution",
+    "verification",
+    "prevention",
+    "limitations"
+  ],
+  "properties": {
+    "incident_id": {
+      "type": "string",
+      "description": "Practice incident identifier supplied by the environment."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "resolved",
+        "mitigated",
+        "unresolved",
+        "escalated",
+        "false_alarm"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "event"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "description": "ISO-8601 timestamp"
+          },
+          "event": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "diagnosis": {
+      "type": "object",
+      "required": [
+        "affected_component",
+        "root_cause",
+        "confidence"
+      ],
+      "properties": {
+        "affected_component": {
+          "type": "string"
+        },
+        "root_cause": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "alternatives_considered": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "observation",
+          "supports"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "trace",
+              "metric",
+              "log",
+              "container_health",
+              "deployment_history",
+              "other"
+            ]
+          },
+          "observation": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Trace ID, log reference, metric query, or other retrievable source reference."
+          },
+          "supports": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "proposed_action": {
+      "type": "object",
+      "required": [
+        "action",
+        "reason",
+        "dry_run"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Must be an allowed Action API action."
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "approval": {
+      "type": "object",
+      "required": [
+        "required",
+        "decision"
+      ],
+      "properties": {
+        "required": {
+          "const": true
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "not_requested"
+          ]
+        },
+        "approver": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timestamp": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "attempted",
+        "action_api_only"
+      ],
+      "properties": {
+        "attempted": {
+          "type": "boolean"
+        },
+        "action_api_only": {
+          "const": true
+        },
+        "action_result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rollback_performed": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "verification": {
+      "type": "object",
+      "required": [
+        "checked",
+        "recovered"
+      ],
+      "properties": {
+        "checked": {
+          "type": "boolean"
+        },
+        "recovered": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "signals_checked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "prevention": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}
