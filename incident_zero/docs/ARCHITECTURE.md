@@ -9,6 +9,9 @@ Full diagram: [`architecture.svg`](architecture.svg) (agents, telemetry, knowled
    │ traces ─► Jaeger      metrics ─► Prometheus      logs ─► OpenSearch      state ─► Docker (read only)
    ▼
  ┌──────────── agent process (incident_zero up) ─────────────────────────────────────────────────────┐
+ │ EYES (1-4) perceive and diagnose · HANDS (5-9) act through guarded steps · BRAIN serves both:       │
+ │   model, knowledge, casebook of every closed incident, token meter, known-incident recall           │
+ │ 0 Brain recall ─ alerts match a solved incident? run 1-9 with no model calls (audited + approved)   │
  │ 1 Sentinel ─ alert rules on span metrics + container state ─► opens / correlates an Incident        │
  │ 2 Investigator ─ model picks the next telemetry tool (LangGraph loop); every result = evidence E<n> │
  │ 3 Diagnostician ─ component, cause, confidence; claims quote evidence verbatim                      │
@@ -33,6 +36,7 @@ Full diagram: [`architecture.svg`](architecture.svg) (agents, telemetry, knowled
 | Telemetry tools (Investigator) | `overview`, `service_metrics`, `find_traces`, `trace_detail`, `search_logs`, `container_status`, `container_resources`, `dependencies`, `datastore_metrics`, `promql` | `telemetry/tools.py` |
 | Knowledge (Planner) | code search (`knowledge/code_index.py`), runbooks (`knowledge/runbooks.py`), memory (`knowledge/memory.py`), BM25 ranking (`knowledge/search.py`) | `knowledge/` |
 | Allowed actions | `restart_service`, `toggle_feature_flag`, `throttle_load_generator`, `scale_service` (Kubernetes only) | Action API, `actions/` |
+| Brain | casebook of every closed incident (`brain/casebook.py`), token meter per incident and agent (`brain/meter.py`), known-incident recall (`brain/recall.py`); see [BRAIN](BRAIN.md) | `brain/` |
 | Model | any OpenAI-compatible endpoint, Anthropic or Ollama (`.env`); without one every agent has a deterministic path | `llm*.py` |
 | Control Room | React UI: war room, incidents, evidence, knowledge, plan + approval, report, practice | `ui/`, `server/http.py` |
 | Practice | fault injector (flags, stop, pause, crash loop, CPU/memory limits, latency/loss, disconnect, user traffic), hidden truth, Judge, blind set | `practice/` |
@@ -46,7 +50,10 @@ Full diagram: [`architecture.svg`](architecture.svg) (agents, telemetry, knowled
    is searched in the demo's source. The flag condition that guards the raising line is a fix candidate, and the
    runbooks for the symptom say what else applies (or that nothing allowed does: escalate). Past verified outcomes
    give a track record. Every action must cite a `K` item verbatim, or code drops it.
-4. **Approve, act, verify.** Correctness is proven only after the fact. The Verifier requires the triggering signals to
+4. **Known incidents.** If the alerts match an incident already resolved live, steps 1-3 run without the model: the
+   playbook investigates, the rules must name the same component and failure, the audit still checks, and the
+   case's verified fix is planned citing incident memory. Any disagreement falls back to the full pipeline.
+5. **Approve, act, verify.** Correctness is proven only after the fact. The Verifier requires the triggering signals to
    be clear for 2 consecutive checks; otherwise it rolls back and escalates. The outcome goes to memory.
 
 ## Safety controls

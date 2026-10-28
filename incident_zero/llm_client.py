@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from typing import Any, Optional
 
 import requests
@@ -42,6 +43,16 @@ class LLMClient:
         self.enabled = enabled
         self._available: Optional[bool] = None
         self.last_error: str = ""
+        self._last = threading.local()  # per thread: each incident runs on its own worker thread
+
+    def last_usage(self) -> Optional[tuple[int, int]]:
+        """(prompt, completion) tokens the provider reported for this thread's last call, or None."""
+        return getattr(self._last, "usage", None)
+
+    def _keep_usage(self, body: Any) -> None:
+        from .brain.meter import usage_from_response
+
+        self._last.usage = usage_from_response(self.provider, body) if isinstance(body, dict) else None
 
     @classmethod
     def from_settings(cls, m, enabled: bool = True) -> "LLMClient":
@@ -80,6 +91,7 @@ class LLMClient:
 
     # ------------------------------------------------------------------ transport
     def _chat(self, system: str, user: str, json_mode: bool, max_tokens: int) -> Optional[str]:
+        self._last.usage = None
         if not self.available():
             return None
         try:
@@ -93,7 +105,9 @@ class LLMClient:
                     body["format"] = "json"
                 r = requests.post(f"{self.base_url}/api/chat", json=body, timeout=self.timeout)
                 r.raise_for_status()
-                return r.json().get("message", {}).get("content")
+                data = r.json()
+                self._keep_usage(data)
+                return data.get("message", {}).get("content")
 
             if self.provider == "openai":
                 body = {
@@ -105,7 +119,9 @@ class LLMClient:
                 r = requests.post(f"{self.base_url}/chat/completions", json=body, timeout=self.timeout,
                                   headers={"Authorization": f"Bearer {self.api_key}"})
                 r.raise_for_status()
-                return r.json()["choices"][0]["message"]["content"]
+                data = r.json()
+                self._keep_usage(data)
+                return data["choices"][0]["message"]["content"]
 
             body = {
                 "model": self.model, "max_tokens": max_tokens, "temperature": 0.2, "system": system,
@@ -114,7 +130,9 @@ class LLMClient:
             r = requests.post(f"{self.base_url}/v1/messages", json=body, timeout=self.timeout,
                               headers={"x-api-key": self.api_key, "anthropic-version": "2023-06-01"})
             r.raise_for_status()
-            return "".join(b.get("text", "") for b in r.json().get("content", []) if b.get("type") == "text")
+            data = r.json()
+            self._keep_usage(data)
+            return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
         except (requests.RequestException, ValueError, KeyError, IndexError) as exc:
             self.last_error = str(exc)
             return None

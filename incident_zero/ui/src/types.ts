@@ -53,6 +53,25 @@ export interface Incident {
   verification: { checked: boolean; recovered: boolean | null; signals_checked: string[]; notes: string;
                   samples: { at: string; firing: string[] }[] };
   prevention: string[]; limitations: string[]; escalation_reason: string; report_summary: string; llm: string;
+  tokens: TokenUsage; recall: Recall | null;
+}
+export interface TokenUsage {
+  calls: number; prompt_tokens: number; completion_tokens: number; estimated: boolean;
+  by_agent: Record<string, { calls: number; prompt_tokens: number; completion_tokens: number }>;
+}
+export interface Recall {
+  status: "matched" | "confirmed" | "abandoned"; case: string; similarity: number; component: string; category: string;
+  actions: { action: string; parameters: Record<string, unknown> }[]; track_record: string; reason: string;
+  model_calls_skipped: number; tokens_saved: number; tokens_saved_estimated: boolean;
+}
+export interface Case {
+  incident: string; at: string; outcome: string; alerts: string[]; components: string[]; categories: string[];
+  mode: "reasoned" | "recalled"; recall_of: string | null; tokens: { calls: number; total: number; estimated?: boolean };
+  tokens_saved: number;
+}
+export interface BrainStats {
+  model: string; recall_enabled: boolean; incidents: number; by_outcome: Record<string, number>; known_fixes: number;
+  recalled: number; model_calls: number; tokens_used: number; tokens_saved: number; cases: Case[];
 }
 export interface IncidentSummary {
   id: string; title: string; phase: Phase; created_at: string; updated_at: string; services: string[];
@@ -73,7 +92,7 @@ export interface State {
   approval_timeout_s: number;
 }
 export interface AgentRow {
-  agent: string; state: "idle" | "working"; incident_id: string | null; doing: string; since: string; runs: number;
+  agent: string; layer: "eyes" | "hands"; state: "idle" | "working"; incident_id: string | null; doing: string; since: string; runs: number;
   recent: Event[];
 }
 export interface RED { rps: number; error_ratio: number; p95_ms?: number | null; p95?: number | null }

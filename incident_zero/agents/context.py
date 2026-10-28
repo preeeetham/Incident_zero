@@ -17,23 +17,32 @@ from ..telemetry.tools import Telemetry
 
 AGENTS = ("sentinel", "investigator", "diagnostician", "auditor", "planner", "approval", "executor", "verifier",
           "reporter")
+# the three layers (eyes/, brain/, hands/): the Eyes perceive and diagnose, the Hands act and close out, and the
+# Brain (the model, knowledge and the casebook) serves both. Every agent belongs to the Eyes or the Hands.
+LAYER = {"sentinel": "eyes", "investigator": "eyes", "diagnostician": "eyes", "auditor": "eyes",
+         "planner": "hands", "approval": "hands", "executor": "hands", "verifier": "hands", "reporter": "hands"}
 
 
 @dataclass
 class StatusBoard:
     _rows: dict[str, dict[str, Any]] = field(default_factory=lambda: {
-        a: {"agent": a, "state": "idle", "incident_id": None, "doing": "", "since": iso(), "runs": 0} for a in AGENTS})
+        a: {"agent": a, "layer": LAYER[a], "state": "idle", "incident_id": None, "doing": "", "since": iso(), "runs": 0}
+        for a in AGENTS})
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     @contextmanager
     def working(self, agent: str, incident_id: Optional[str], doing: str) -> Iterator[None]:
+        from ..brain.meter import current_agent
+
         with self._lock:
             row = self._rows[agent]
             row.update(state="working", incident_id=incident_id, doing=doing, since=iso())
             row["runs"] += 1
+        token = current_agent.set(agent)  # the token meter attributes model calls made in here to this agent
         try:
             yield
         finally:
+            current_agent.reset(token)
             with self._lock:
                 self._rows[agent].update(state="idle", doing="", since=iso())
 

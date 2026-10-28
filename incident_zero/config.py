@@ -74,6 +74,9 @@ class Settings:
     investigator_budget: int = 16            # tool calls per investigation round
     audit_retries: int = 2                   # send-backs from the Auditor before rule-based diagnosis takes over
     max_plan_actions: int = 3
+    recall_enabled: bool = True              # answer a known incident from the casebook, with no model calls
+    recall_min_similarity: float = 0.6       # alert fingerprint overlap (Jaccard) for an incident to count as known
+    recall_min_successes: int = 1            # live, verified recoveries of a fix before it is reused
     verify_settle_s: float = 30.0
     verify_window_s: float = 240.0
     verify_consecutive: int = 2

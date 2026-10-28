@@ -8,7 +8,8 @@
   GET  /api/incidents/<id>/report         {json, markdown}
   POST /api/incidents/<id>/decision       {decision: approved|rejected|sent_back, approver, change_hash, note}
   GET  /api/approvals                     incidents waiting for a decision
-  GET  /api/agents                        live status of the nine agents
+  GET  /api/agents                        live status of the nine agents, with their layer (eyes / hands)
+  GET  /api/brain                         the Brain: casebook totals, tokens used and saved, recent cases
   GET  /api/overview                      stability samples, containers, traffic/errors, incident markers
   GET  /api/services                      per-service health snapshot (cached a few seconds)
   GET  /api/events?after=<seq>            events after a sequence number (polling fallback)
@@ -126,6 +127,9 @@ def make_handler(app: App, ui_dir: Path = UI_DIST):
                     for r in rows:
                         r["recent"] = [e.model_dump() for e in recent if e.agent == r["agent"]][-5:]
                     return self._json(200, rows)
+                if path == "/api/brain":
+                    brain = app.orchestrator.brain
+                    return self._json(200, {**brain.stats(), "cases": brain.casebook.entries()[-20:][::-1]})
                 if path == "/api/services":
                     return self._json(200, services.get())
                 if path == "/api/overview":

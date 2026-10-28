@@ -30,7 +30,15 @@ export default function IncidentPage() {
           <p className="sub">
             Opened {clock(inc.created_at)} · {inc.resolved_at ? `resolved in ${duration(inc.created_at, inc.resolved_at)}` : `${duration(inc.created_at, inc.phase === "awaiting_approval" ? null : inc.updated_at)}`}
             {" · "}{inc.alerts.length} alert(s) · model {inc.llm || "-"}
+            {" · "}{inc.tokens.calls} model call(s), {inc.tokens.prompt_tokens + inc.tokens.completion_tokens} tokens{inc.tokens.estimated ? " (estimated)" : ""}
           </p>
+          {inc.recall && (
+            <p className={`small ${inc.recall.status === "abandoned" ? "t-warn" : "t-info"}`} style={{ marginTop: 4 }}>
+              {inc.recall.status === "abandoned"
+                ? <>Known-incident recall of {inc.recall.case} abandoned: {inc.recall.reason}. Reasoned with the model.</>
+                : <>Known incident: a repeat of {inc.recall.case} ({inc.recall.component}, {inc.recall.category}) · {inc.recall.track_record} · answered from the casebook with no model calls{inc.recall.tokens_saved ? ` · about ${inc.recall.tokens_saved.toLocaleString()} tokens saved` : ""}{inc.recall.status === "matched" ? " (confirming)" : ""}</>}
+            </p>
+          )}
         </div>
       </div>
       <div style={{ marginBottom: 24 }}><Pipeline phase={inc.phase} /></div>
@@ -156,7 +164,7 @@ export function PlanTab() {
           {inc.plan && <span className="mono faint small" title="plan hash">#{inc.plan.change_hash.slice(0, 10)}</span>}
         </div>
         <PlanActions inc={inc} />
-        {inc.plan && <p className="small faint">chosen by {inc.plan.produced_by === "llm" ? "the model" : "rules"} from the retrieved knowledge; every citation is checked verbatim by code</p>}
+        {inc.plan && <p className="small faint">chosen by {inc.plan.produced_by === "llm" ? "the model" : inc.plan.produced_by === "memory" ? `the casebook (the verified fix of ${inc.recall?.case ?? "a known incident"})` : "rules"} from the retrieved knowledge; every citation is checked verbatim by code</p>}
         <Decision inc={inc} onDone={reload} />
         {inc.approval.decision !== "pending" && inc.approval.decision !== "not_requested" && (
           <p className="small muted">

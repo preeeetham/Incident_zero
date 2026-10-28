@@ -64,10 +64,12 @@ class Investigator:
     def __init__(self, ctx: Context):
         self.ctx = ctx
 
-    def run(self, inc: Incident, ledger: EvidenceLedger, feedback: Optional[list[str]] = None) -> str:
+    def run(self, inc: Incident, ledger: EvidenceLedger, feedback: Optional[list[str]] = None,
+            use_model: bool = True) -> str:
+        """use_model=False: the playbook only (a recalled incident, brain.recall: no model calls)."""
         box = Toolbox(self.ctx.telemetry, ledger)
         feedback = feedback or []
-        model = self.ctx.llm.tool_model()
+        model = self.ctx.llm.tool_model() if use_model else None
         with self.ctx.status.working("investigator", inc.id, f"round {inc.rounds}"):
             if model is not None:
                 try:
@@ -99,7 +101,7 @@ class Investigator:
                                                   args_schema=FinishArgs))
         bound = model.bind_tools(tools)
         budget = self.ctx.settings.investigator_budget
-        bus, safety = self.ctx.bus, self.ctx.safety
+        bus, safety, llm = self.ctx.bus, self.ctx.safety, self.ctx.llm
 
         class S(TypedDict):
             messages: list
@@ -113,6 +115,7 @@ class Investigator:
             if state["calls"] >= budget:
                 msgs.append(HumanMessage("Tool budget spent. Call finish_investigation now."))
             resp = bound.invoke(msgs)
+            llm.count_tool_turn(resp, sent="".join(str(getattr(m, "content", "")) for m in msgs), incident_id=inc.id)
             text = resp.content if isinstance(resp.content, str) else " ".join(
                 str(p.get("text", "")) for p in resp.content if isinstance(p, dict))
             if text.strip():

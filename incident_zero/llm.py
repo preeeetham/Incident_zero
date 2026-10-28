@@ -14,7 +14,10 @@ from .config import model_settings
 
 class LLM:
     def __init__(self, client: Any = None, tool_model: Any = None, label: str = "disabled", reason: str = ""):
+        from .brain.meter import TokenMeter
+
         self.client, self._tool_model, self.label, self.reason = client, tool_model, label, reason
+        self.meter = TokenMeter()  # every call below is counted here (brain.meter)
 
     @property
     def enabled(self) -> bool:
@@ -46,7 +49,28 @@ class LLM:
     def json(self, system: str, user: str, max_tokens: int = 1500) -> Optional[dict]:
         if self.client is None:
             return None
-        return self.client.chat_json(system, user, max_tokens=max_tokens)
+        from .brain.meter import estimate_tokens
+
+        data = self.client.chat_json(system, user, max_tokens=max_tokens)
+        usage = self.client.last_usage() if hasattr(self.client, "last_usage") else None
+        if usage is not None:
+            self.meter.record(*usage)
+        else:  # the provider reported no usage (or the call failed): count what was sent and received
+            self.meter.record(estimate_tokens(system + user), estimate_tokens(str(data) if data else ""),
+                              estimated=True)
+        return data
+
+    def count_tool_turn(self, message: Any, sent: str = "", incident_id: Optional[str] = None) -> None:
+        """Count one turn of the Investigator's tool loop (a LangChain AIMessage). The incident is passed explicitly:
+        LangGraph may run a node on another thread."""
+        from .brain.meter import estimate_tokens, usage_from_message
+
+        usage = usage_from_message(message)
+        if usage is not None:
+            self.meter.record(*usage, agent="investigator", incident_id=incident_id)
+        else:
+            self.meter.record(estimate_tokens(sent), estimate_tokens(str(getattr(message, "content", ""))),
+                              estimated=True, agent="investigator", incident_id=incident_id)
 
     def tool_model(self) -> Any:
         return self._tool_model

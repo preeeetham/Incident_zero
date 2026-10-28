@@ -130,7 +130,7 @@ class ProposedAction(BaseModel):
 class Plan(BaseModel):
     actions: list[ProposedAction]
     change_hash: str                          # sha256 of exactly what the human is shown
-    produced_by: Literal["llm", "rules"] = "rules"
+    produced_by: Literal["llm", "rules", "memory"] = "rules"  # memory: a known incident's verified fix (recall)
     no_action_reason: str = ""                # set when nothing in the runbook fits: escalate instead
     created_at: str = Field(default_factory=iso)
 
@@ -173,6 +173,34 @@ class VerificationRecord(BaseModel):
     samples: list[dict[str, Any]] = []
 
 
+class TokenUsage(BaseModel):
+    """What the model cost for one incident, measured by the Brain's token meter."""
+    calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    estimated: bool = False                   # some counts estimated from text length (provider sent no usage)
+    by_agent: dict[str, dict[str, int]] = {}  # agent -> {"calls", "prompt_tokens", "completion_tokens"}
+
+    @property
+    def total(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+
+class RecallRecord(BaseModel):
+    """The Brain recognised this incident as a repeat of one it already solved (brain.recall)."""
+    status: Literal["matched", "confirmed", "abandoned"] = "matched"
+    case: str                                 # the past incident whose verified fix is reused
+    similarity: float = 0.0                   # how closely this incident's alerts match the case's (Jaccard)
+    component: str = ""
+    category: str = ""
+    actions: list[dict[str, Any]] = []        # the case's live, verified actions
+    track_record: str = ""                    # e.g. "recovered 2 of 2 past incidents with these alerts"
+    reason: str = ""                          # why it was abandoned
+    model_calls_skipped: int = 0              # what the case's own reasoning took
+    tokens_saved: int = 0
+    tokens_saved_estimated: bool = False      # true when the case's cost is an average, not its own measurement
+
+
 class Incident(BaseModel):
     id: str
     title: str
@@ -198,6 +226,8 @@ class Incident(BaseModel):
     escalation_reason: str = ""
     report_summary: str = ""
     llm: str = ""                             # which model ran, or why none did
+    tokens: TokenUsage = Field(default_factory=TokenUsage)
+    recall: Optional[RecallRecord] = None
 
     @property
     def terminal(self) -> bool:

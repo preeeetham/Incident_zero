@@ -291,6 +291,7 @@ def test_no_flag_data_anywhere(settings, store, bus):
 def test_sentinel_debounce_and_suppression(settings, store, bus):
     svcs, traces = payment_failure()
     orch, _ = build(settings, store, bus, svcs, traces)
+    orch.sentinel.on_new_incident = lambda _id: None  # no worker: this test closes the incident by hand
     assert orch.sentinel.tick() == []  # first sighting is not yet an alert
     assert orch.sentinel.tick()        # confirmed on the second
     inc = store.list()[0]

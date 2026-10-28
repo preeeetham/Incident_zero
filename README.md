@@ -8,10 +8,10 @@
 ![OpenTelemetry Demo](https://img.shields.io/badge/target-OpenTelemetry%20Demo-425CC7?logo=opentelemetry&logoColor=white)
 ![LangGraph](https://img.shields.io/badge/agents-LangGraph-1c3c3c)
 ![React + Vite](https://img.shields.io/badge/control%20room-React%20%2B%20Vite-61DAFB?logo=react&logoColor=black)
-![Tests: 92 passing](https://img.shields.io/badge/tests-92%20passing-2ea44f)
+![Tests: 105 passing](https://img.shields.io/badge/tests-105%20passing-2ea44f)
 ![Fixes: human-approved only](https://img.shields.io/badge/fixes-human--approved%20only-f97362)
 
-**[Results](#results)** · **[How it works](#how-it-works)** · **[Control Room](#the-control-room)** · **[Quickstart](#quickstart)** · **[Safety](#safety-by-construction)** · **[Docs](#documentation)**
+**[Results](#results)** · **[How it works](#how-it-works)** · **[Eyes, Brain, Hands](#eyes-brain-and-hands)** · **[Control Room](#the-control-room)** · **[Quickstart](#quickstart)** · **[Safety](#safety-by-construction)** · **[Docs](#documentation)**
 
 </div>
 
@@ -29,6 +29,8 @@ It handles an incident from alert to report:
 - **Executes** through the Action API only, then **verifies** recovery. If recovery fails it rolls back and
   escalates.
 - **Writes a report** in JSON and Markdown.
+- **Remembers every incident.** A repeat of one it already fixed is answered from its casebook with **no model
+  calls**, still audited and still approved by a human. Every model call is metered in tokens.
 
 Built for the Bosch hackathon *"Incident Zero: Build an AI On-Call Engineer"* at PES University.
 
@@ -109,6 +111,32 @@ three kinds of knowledge (BM25-ranked):
 Whether a fix was right is only proven afterwards. The triggering signals must stay clear for two consecutive
 checks. If they do not, the Verifier rolls back and escalates.
 
+## Eyes, Brain and Hands
+
+The agents are grouped in three layers ([BRAIN](incident_zero/docs/BRAIN.md) has the details):
+
+| Layer | What | Never |
+|---|---|---|
+| **Eyes** ([`eyes/`](incident_zero/eyes/__init__.py)) | Sentinel, Investigator, Diagnostician, Evidence Auditor: perceive and diagnose | change anything |
+| **Brain** ([`brain/`](incident_zero/brain/__init__.py)) | the model, knowledge, the **casebook** of every closed incident, the **token meter**, **recall** | act |
+| **Hands** ([`hands/`](incident_zero/hands/__init__.py)) | Planner, Approval Gate, Executor, Verifier, Reporter: act through guarded steps | act without a human approval |
+
+**Known incidents cost no model calls.** When an incident's alerts match one the agents already resolved live (fix
+verified, and the last live attempt did not fail), the Brain recalls it. The Investigator runs its playbook, the
+rules diagnose and must name the same component and failure as the past case, the Evidence Auditor still checks
+every quote, the Planner proposes the case's verified fix citing incident memory, and a human still approves the
+hashed plan. If the diagnosis disagrees, the audit fails or the fix no longer validates, recall is abandoned and the
+full pipeline runs with the model.
+
+**Every model call is metered.** Tokens are read from each provider's response (OpenAI-compatible, Anthropic,
+Ollama, LangGraph's `usage_metadata`) and stored per incident and per agent; a recalled incident records the tokens
+its original reasoning took as tokens saved.
+
+<img src="incident_zero/docs/assets/control-room-brain.png" alt="Agents page grouped into Eyes, Brain and Hands; the Brain panel shows incidents remembered, known fixes, incidents answered from memory, tokens used and tokens saved" width="100%">
+
+<sub>**Agents page.** The Brain panel after a repeat incident was answered from memory. From the offline test
+scenario (fake telemetry, a scripted model reporting 1,500 tokens per call), not a live run.</sub>
+
 ### Architecture
 
 <img src="incident_zero/docs/architecture.svg" alt="Incident Zero architecture: OpenTelemetry Demo, telemetry backends, agent process, Action API, Control Room, practice harness and safety controls" width="100%">
@@ -154,7 +182,7 @@ cp incident_zero/incident_zero.example.yaml incident_zero.yaml   # set demo_dir
 cp .env.example .env                                             # model + optional SMTP
 
 incident_zero ui-build        # builds the Control Room
-pytest                        # 92 tests, no Docker or model needed
+pytest                        # 105 tests, no Docker or model needed
 ```
 
 **Model.** Set `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL` and `LLM_API_KEY` in `.env`. Any OpenAI-compatible
@@ -207,6 +235,7 @@ run `docker stop|pause|update`, or use `pumba`. Then watch the War room.
 | Document | What it covers |
 |---|---|
 | [ARCHITECTURE](incident_zero/docs/ARCHITECTURE.md) | One-page architecture, components, decision process, safety controls |
+| [BRAIN](incident_zero/docs/BRAIN.md) | Eyes, Brain and Hands; the casebook, the token meter and known-incident recall |
 | [REQUIREMENTS](incident_zero/docs/REQUIREMENTS.md) | The brief's requirements and how each one is met |
 | [LIVE_RESULTS](incident_zero/docs/LIVE_RESULTS.md) | Every live run on the real demo, including misses and the fixes they led to |
 | [BUILD_LOG](incident_zero/docs/BUILD_LOG.md) | What was built, in what order, and how |
@@ -218,7 +247,10 @@ run `docker stop|pause|update`, or use `pumba`. Then watch the War room.
 
 ```
 incident_zero/
-  agents/        sentinel, investigator, diagnostician, auditor, planner, approval, executor, verifier, reporter
+  eyes/          the Eyes layer: sentinel, investigator, diagnostician, auditor
+  brain/         the Brain layer: casebook, token meter, known-incident recall (plus the model and knowledge/)
+  hands/         the Hands layer: planner, approval, executor, verifier, reporter
+  agents/        the nine agents' implementations
   telemetry/     Prometheus, Jaeger v3, OpenSearch and Docker backends; the Investigator's tools
   knowledge/     code index, runbooks, incident memory, BM25 search
   actions/       Action API client, action catalog, feature flags, the mock Action API server
@@ -241,6 +273,11 @@ incident_zero/
 - With the smallest model tier, some diagnoses fall back to rules. The Control Room labels these "backup rules".
 - Kafka (`compose.full.yaml`) is off by default to fit in 8 GB of Docker memory, so Kafka incidents are untested.
 - Accuracy on unseen incidents is measured with the practice Judge, not guaranteed.
+- Recall matches incidents by their alerts, then requires the rule-based diagnosis to agree. A fault whose alerts and
+  rule diagnosis look like a past one but needs a different fix would be proposed the old fix; the human approval
+  and the Verifier's rollback are the backstop.
+- Token savings are measured on the original incident's own calls; they are only estimated when its provider reported
+  no usage.
 
 ## Acknowledgements
 

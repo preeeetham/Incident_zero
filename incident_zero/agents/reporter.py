@@ -182,6 +182,11 @@ class Reporter:
         with self.ctx.status.working("reporter", inc.id, "writing the incident report"):
             if not inc.prevention:
                 inc.prevention = self._prevention(inc)
+            recalled = inc.recall is not None and inc.recall.status == "confirmed"
+            if recalled and inc.diagnosis and not inc.report_summary:  # known incident: no model call for wording
+                inc.report_summary = (f"Known incident: a repeat of {inc.recall.case} ({inc.recall.component}, "
+                                      f"{inc.recall.category}). {inc.diagnosis.summary} The verified fix of "
+                                      f"{inc.recall.case} was reused ({inc.recall.track_record}); outcome: {inc.phase}.")
             if self.ctx.llm.enabled and inc.diagnosis and not inc.report_summary:
                 data = self.ctx.llm.json(
                     "Write a concise incident summary (max 3 sentences) for an on-call report, using only the facts "

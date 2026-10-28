@@ -15,7 +15,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import yaml
 
@@ -209,9 +209,10 @@ def rule_actions(d: Diagnosis, evidence: list[Evidence], catalog: list[ActionDef
 
 
 class Planner:
-    def __init__(self, ctx: Context):
+    def __init__(self, ctx: Context, knowledge: Optional[Knowledge] = None, recall: Optional[Any] = None):
         self.ctx = ctx
-        self.knowledge = Knowledge(ctx.settings.demo_dir, ctx.settings.data_dir)
+        self.knowledge = knowledge or Knowledge(ctx.settings.demo_dir, ctx.settings.data_dir)
+        self.recall = recall  # brain.recall.Recall: a known incident's verified fix, no model call
 
     def run(self, inc: Incident, d: Diagnosis, evidence: list[Evidence]) -> Plan:
         with self.ctx.status.working("planner", inc.id, "retrieving knowledge and choosing a runbook action"):
@@ -227,10 +228,16 @@ class Planner:
             produced_by = "rules"
             actions: list[ProposedAction] = []
             notes: list[str] = []
-            if self.ctx.llm.enabled:
+            recalled = inc.recall is not None and inc.recall.status == "confirmed" and self.recall is not None
+            if recalled:
+                actions = self.recall.actions(inc.recall, items)
+                produced_by = "memory"
+                self.ctx.bus.publish("planner", "step", f"known incident: reusing the verified fix of {inc.recall.case} "
+                                     f"({inc.recall.track_record}); no model call", incident_id=inc.id)
+            elif self.ctx.llm.enabled:
                 actions = self._model(inc, d, evidence, catalog, items) or []
                 produced_by = "llm" if actions else "rules"
-            if not actions:
+            if not actions and not recalled:  # a recalled fix that cannot be built: the orchestrator reasons again
                 ops = failing_operations(inc.alerts)
                 actions, notes = rule_actions(d, evidence, catalog, items, normal_users=self.ctx.settings.normal_load_users,
                                               operations=ops)
@@ -258,7 +265,8 @@ class Planner:
                 a.preview = prev.message if prev else None
                 a.dry_run = self.ctx.safety.dry_run
                 valid.append(a)
-            reason = "" if valid else ("; ".join(notes) or "no allowed action fits this diagnosis")
+            reason = "" if valid else ("; ".join(notes) or ("the known incident's fix did not validate" if recalled
+                                                             else "no allowed action fits this diagnosis"))
             if valid and notes:
                 inc.limitations.extend(notes)
             plan = Plan(actions=valid, change_hash=plan_hash(inc.id, d, valid), produced_by=produced_by,  # type: ignore[arg-type]

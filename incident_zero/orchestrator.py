@@ -11,7 +11,13 @@ after every phase (REQUIREMENTS N2).
                                               executing -> verifying --recovered--> resolved
                                                                      --dry run----> dry_run_complete
                                                                      --not recovered (rolled back)--> escalated
-  every terminal phase -> Reporter
+  every terminal phase -> Reporter, incident memory and the casebook
+
+The agents are grouped in three layers: the Eyes (eyes/: sentinel, investigator, diagnostician, auditor), the Hands
+(hands/: planner, approval, executor, verifier, reporter) and the Brain (brain/: the model, knowledge, the casebook
+and the token meter). On a known incident (brain.recall) the same phases run with no model calls: the playbook
+investigates, the rules diagnose and must agree with the case, the audit still checks, the case's verified fix is
+planned and a human still approves. Any disagreement abandons recall and the full pipeline takes over.
 
 The kill switch pauses a worker where it stands (agents raise Frozen) until resumed. A restart resumes open
 incidents; an incident whose actions were already attempted goes to verification, never to execution again.
@@ -22,17 +28,14 @@ import threading
 import time
 from typing import Optional
 
-from .agents.approval import ApprovalGate
-from .agents.auditor import Auditor
 from .agents.context import Context
-from .agents.diagnostician import Diagnostician, drop_unsupported, rule_diagnosis
-from .agents.executor import Executor
-from .agents.investigator import Investigator
-from .agents.planner import Planner
-from .agents.reporter import Reporter
-from .agents.sentinel import Sentinel
-from .agents.verifier import Verifier
+from .agents.diagnostician import drop_unsupported, rule_diagnosis
+from .brain import Brain
+from .brain.meter import bound
+from .brain.recall import Recall
 from .evidence import EvidenceLedger
+from .eyes import Eyes
+from .hands import Hands
 from .models import ApprovalRecord, Incident, iso
 from .safety import Frozen
 
@@ -40,15 +43,14 @@ from .safety import Frozen
 class Orchestrator:
     def __init__(self, ctx: Context):
         self.ctx = ctx
-        self.sentinel = Sentinel(ctx, self.open)
-        self.investigator = Investigator(ctx)
-        self.diagnostician = Diagnostician(ctx)
-        self.auditor = Auditor(ctx)
-        self.planner = Planner(ctx)
-        self.approval = ApprovalGate(ctx)
-        self.executor = Executor(ctx)
-        self.verifier = Verifier(ctx, self.sentinel.learned)
-        self.reporter = Reporter(ctx)
+        self.eyes = Eyes(ctx, self.open)
+        self.brain = Brain(ctx)
+        self.hands = Hands(ctx, self.brain, self.eyes.sentinel.learned)
+        # the agents by name, as the CLI, server and tests address them
+        self.sentinel, self.investigator = self.eyes.sentinel, self.eyes.investigator
+        self.diagnostician, self.auditor = self.eyes.diagnostician, self.eyes.auditor
+        self.planner, self.approval, self.executor = self.hands.planner, self.hands.approval, self.hands.executor
+        self.verifier, self.reporter = self.hands.verifier, self.hands.reporter
         self._workers: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
         self._sentinel_thread: Optional[threading.Thread] = None
@@ -81,6 +83,13 @@ class Orchestrator:
 
     # ------------------------------------------------------------ the worker
     def run_incident(self, incident_id: str) -> None:
+        inc = self.ctx.store.load(incident_id)
+        if inc is not None:
+            self.brain.meter.seed(incident_id, inc.tokens)
+        with bound(incident_id):  # every model call on this worker is counted against this incident
+            self._run(incident_id)
+
+    def _run(self, incident_id: str) -> None:
         frozen_said = False
         while True:
             inc = self.ctx.store.load(incident_id)
@@ -108,6 +117,7 @@ class Orchestrator:
     def _goto(self, inc: Incident, phase: str) -> None:
         old = inc.phase
         inc.phase = phase  # type: ignore[assignment]
+        inc.tokens = self.brain.meter.usage(inc.id)
         self.ctx.store.save(inc)
         self.ctx.bus.publish("system", "phase", f"{inc.id}: {old} -> {phase}", incident_id=inc.id,
                              detail={"from": old, "to": phase})
@@ -118,6 +128,7 @@ class Orchestrator:
         if phase == "resolved":
             inc.resolved_at = iso()
         old, inc.phase = inc.phase, phase  # type: ignore[assignment]
+        inc.tokens = self.brain.meter.usage(inc.id)
         self.ctx.bus.publish("system", "phase", f"{inc.id}: {old} -> {phase}", incident_id=inc.id,
                              detail={"from": old, "to": phase})
         try:
@@ -133,19 +144,53 @@ class Orchestrator:
                                      f"{', '.join(a['action'] for a in entry['actions'])}", incident_id=inc.id)
         except OSError as exc:
             self.ctx.bus.publish("planner", "error", f"incident memory not written: {exc}", incident_id=inc.id)
+        inc.tokens = self.brain.meter.usage(inc.id)  # the Reporter's wording call is counted too
+        try:  # the casebook: every closed incident, with what the model cost
+            entry = self.brain.casebook.record(inc)
+            if entry:
+                cost = (f"{inc.tokens.calls} model calls, {inc.tokens.total} tokens"
+                        + (" (estimated)" if inc.tokens.estimated else ""))
+                if entry["mode"] == "recalled":
+                    cost += f"; saved about {entry['tokens_saved']} tokens by recalling {entry['recall_of']}"
+                self.ctx.bus.publish("brain", "step", f"casebook: {inc.id} stored as {phase} ({cost})",
+                                     incident_id=inc.id, detail={"tokens": inc.tokens.model_dump(),
+                                                                 "mode": entry["mode"]})
+        except OSError as exc:
+            self.ctx.bus.publish("brain", "error", f"casebook not written: {exc}", incident_id=inc.id)
         self.ctx.store.save(inc)
+
+    # ------------------------------------------------------------ recall (brain.recall)
+    @staticmethod
+    def _recalling(inc: Incident) -> bool:
+        return inc.recall is not None and inc.recall.status in ("matched", "confirmed")
+
+    def _abandon_recall(self, inc: Incident, why: str) -> None:
+        assert inc.recall is not None
+        inc.recall.status, inc.recall.reason = "abandoned", why
+        inc.recall.model_calls_skipped, inc.recall.tokens_saved = 0, 0
+        inc.limitations.append(f"known-incident recall of {inc.recall.case} abandoned: {why}")
+        self.ctx.bus.publish("brain", "step", f"recall abandoned ({why}); reasoning with the model",
+                             incident_id=inc.id)
 
     def step(self, inc: Incident) -> None:
         ctx = self.ctx
         p = inc.phase
         if p == "detected":
+            rec = self.brain.recall.lookup(inc)
+            if rec is not None:
+                inc.recall = rec
+                ctx.bus.publish("brain", "step", f"known incident: alerts match {rec.case} ({rec.component}, "
+                                f"{rec.category}; {rec.track_record}). Answering from the casebook with no model "
+                                "calls; the evidence audit and human approval still apply", incident_id=inc.id,
+                                detail=rec.model_dump())
             return self._goto(inc, "investigating")
 
         if p == "investigating":
             ctx.safety.check()
             ledger = EvidenceLedger(ctx.store, ctx.bus, inc.id)
             last = inc.audits[-1] if inc.audits and not inc.audits[-1].passed else None
-            summary = self.investigator.run(inc, ledger, last.problems if last else None)
+            summary = self.investigator.run(inc, ledger, last.problems if last else None,
+                                            use_model=not self._recalling(inc))
             inc = ctx.store.load(inc.id) or inc  # the Sentinel may have attached alerts meanwhile
             inc.investigation_notes.append(summary)
             inc.rounds += 1
@@ -155,9 +200,16 @@ class Orchestrator:
         if p == "diagnosing":
             ctx.safety.check()
             failed_rounds = sum(1 for a in inc.audits if not a.passed)
-            use_model = failed_rounds < ctx.settings.audit_retries
+            recalling = self._recalling(inc)
+            use_model = failed_rounds < ctx.settings.audit_retries and not recalling
             d = self.diagnostician.run(inc, ctx.store.evidence(inc.id),
                                        inc.investigation_notes[-1] if inc.investigation_notes else "", use_model)
+            if recalling:
+                assert inc.recall is not None
+                why = Recall.confirms(inc.recall, d)
+                if why:
+                    self._abandon_recall(inc, why)
+                    return self._goto(inc, "investigating")
             inc.diagnosis = d
             ctx.bus.publish("diagnostician", "step", f"({d.produced_by}) {d.summary} confidence {d.confidence:.2f}",
                             incident_id=inc.id, detail=d.model_dump())
@@ -172,7 +224,16 @@ class Orchestrator:
                 inc.escalation_reason = ""
                 return self.finish(inc, "false_alarm")  # nothing to fix: no plan, no approval, no action
             if res.passed:
+                if self._recalling(inc):
+                    assert inc.recall is not None
+                    inc.recall.status = "confirmed"
+                    ctx.bus.publish("brain", "step", f"known incident confirmed: the rules agree with {inc.recall.case} "
+                                    "and the evidence audit passed", incident_id=inc.id)
                 return self._goto(inc, "planning")
+            if self._recalling(inc):
+                self._abandon_recall(inc, "the evidence audit rejected the rule-based diagnosis: "
+                                     + "; ".join(res.problems)[:200])
+                return self._goto(inc, "investigating")
             failed_rounds = sum(1 for a in inc.audits if not a.passed)
             if failed_rounds <= ctx.settings.audit_retries:
                 return self._goto(inc, "investigating")
@@ -202,13 +263,17 @@ class Orchestrator:
         if p == "planning":
             assert inc.diagnosis is not None
             plan = self.planner.run(inc, inc.diagnosis, ctx.store.evidence(inc.id))
+            if plan.produced_by == "memory" and not plan.actions:
+                self._abandon_recall(inc, plan.no_action_reason)
+                plan = self.planner.run(inc, inc.diagnosis, ctx.store.evidence(inc.id))
             inc.plan = plan
             if not plan.actions:
                 inc.escalation_reason = plan.no_action_reason or "no action proposed"
                 return self.finish(inc, "escalated")
-            ctx.store.save(inc)
-            self._goto(inc, "awaiting_approval")
+            # mark the plan pending before the phase changes: anyone who sees "awaiting_approval" (the Control Room,
+            # the CLI) can decide at once, without racing the request
             self.approval.request(inc)
+            self._goto(inc, "awaiting_approval")
             return None
 
         if p == "awaiting_approval":

@@ -208,3 +208,19 @@ def test_stability_uses_the_sentinels_rules(settings):
     assert {u["name"]: u["why"] for u in s["unhealthy"]} == {
         "cart": "errors 30%", "valkey-cart": "container exited", "quote": "p95 2000 ms"}
     assert (s["up"], s["containers"]) == (4, 5)
+
+
+def test_brain_endpoint_and_agent_layers(running):
+    app, base = running
+    settings = app.settings
+    settings.approval_timeout_s = 0.3
+    app.orchestrator.start(sentinel=False)
+    inc_id = tick_until_incident(app.orchestrator)
+    wait_phase(app.ctx.store, inc_id, ("escalated",))
+    brain = requests.get(base + "/api/brain").json()
+    assert brain["incidents"] == 1 and brain["by_outcome"] == {"escalated": 1} and brain["recall_enabled"] is True
+    assert brain["cases"][0]["incident"] == inc_id and brain["cases"][0]["mode"] == "reasoned"
+    layers = {r["agent"]: r["layer"] for r in requests.get(base + "/api/agents").json()}
+    assert layers["investigator"] == "eyes" and layers["executor"] == "hands"
+    inc = requests.get(f"{base}/api/incidents/{inc_id}").json()
+    assert inc["tokens"]["calls"] == 0 and inc["recall"] is None  # no model configured in this fixture
